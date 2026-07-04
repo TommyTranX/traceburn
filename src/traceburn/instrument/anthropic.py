@@ -49,10 +49,20 @@ def is_available() -> bool:
     return importlib.util.find_spec("anthropic") is not None
 
 
-def _start_llm_span(kwargs: dict[str, Any], stream: bool):
-    recorder = get_recorder()
+def normalized_request(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """The stored request payload; also the input to request_hash.
+
+    Replay reproduces hashes through this same function, so its output for
+    given kwargs is a compatibility surface.
+    """
     request = clean_params(kwargs, MESSAGES_PARAMS)
     request["endpoint"] = "messages"
+    return request
+
+
+def _start_llm_span(kwargs: dict[str, Any], stream: bool):
+    recorder = get_recorder()
+    request = normalized_request(kwargs)
     model = kwargs.get("model") or "unknown"
     attributes = {
         "gen_ai.system": "anthropic",
@@ -102,12 +112,17 @@ def _normalize_content(message: Any) -> dict[str, Any]:
 
 
 def _capture_message(handle, message: Any) -> None:
+    try:
+        raw = message.model_dump(mode="json")
+    except Exception:
+        raw = None
     handle.set_attributes(
         {
             "gen_ai.response.model": getattr(message, "model", None),
             "gen_ai.response.id": getattr(message, "id", None),
             "finish_reason": getattr(message, "stop_reason", None),
             "response": _normalize_content(message),
+            "response_raw": raw,
         }
     )
     _set_usage(handle, getattr(message, "usage", None))

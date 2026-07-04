@@ -91,6 +91,16 @@ class PricingTable:
         """Set or replace one ``provider/model`` entry at runtime."""
         self._prices[key.lower()] = price
 
+    def cheapest_for_provider(self, provider: str) -> tuple[str, ModelPrice] | None:
+        """The provider's lowest-input-rate entry, as (key, price)."""
+        prefix = provider.lower() + "/"
+        candidates = [
+            (key, price) for key, price in self._prices.items() if key.startswith(prefix)
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda item: item[1].input_per_mtok)
+
     def lookup(self, provider: str | None, model: str | None) -> ModelPrice | None:
         if not model:
             return None

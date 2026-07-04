@@ -21,6 +21,11 @@ def pricing():
                 output_per_mtok=8.0,
                 cached_input_per_mtok=0.5,
             ),
+            "openai/gpt-test-mini": ModelPrice(
+                input_per_mtok=0.4,
+                output_per_mtok=1.6,
+                cached_input_per_mtok=0.1,
+            ),
             "anthropic/claude-test": ModelPrice(
                 input_per_mtok=3.0,
                 output_per_mtok=15.0,

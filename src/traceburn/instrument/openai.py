@@ -99,10 +99,22 @@ def _messages_text(messages: Any) -> str:
     return "\n".join(parts)
 
 
-def _start_llm_span(endpoint: str, params: tuple[str, ...], kwargs: dict[str, Any]):
-    recorder = get_recorder()
+def normalized_request(endpoint: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """The stored request payload; also the input to request_hash.
+
+    Replay reproduces hashes through this same function, so its output for
+    given kwargs is a compatibility surface: change it and old recordings
+    stop matching.
+    """
+    params = RESPONSES_PARAMS if endpoint == "responses" else CHAT_PARAMS
     request = clean_params(kwargs, params)
     request["endpoint"] = endpoint
+    return request
+
+
+def _start_llm_span(endpoint: str, params: tuple[str, ...], kwargs: dict[str, Any]):
+    recorder = get_recorder()
+    request = normalized_request(endpoint, kwargs)
     model = kwargs.get("model") or "unknown"
     attributes = {
         "gen_ai.system": "openai",
@@ -112,6 +124,13 @@ def _start_llm_span(endpoint: str, params: tuple[str, ...], kwargs: dict[str, An
         "request_hash": request_hash(request),
     }
     return recorder.start_span(f"chat {model}", kind="llm", attributes=attributes)
+
+
+def _raw_dump(result: Any) -> Any:
+    try:
+        return result.model_dump(mode="json")
+    except Exception:
+        return None
 
 
 def _set_chat_usage(handle, usage: Any) -> None:
@@ -168,6 +187,7 @@ def _capture_chat_response(handle, result: Any) -> None:
                 "text": getattr(message, "content", None),
                 "tool_calls": tool_calls,
             },
+            "response_raw": _raw_dump(result),
         }
     )
     _set_chat_usage(handle, getattr(result, "usage", None))
@@ -193,6 +213,7 @@ def _capture_responses_response(handle, result: Any) -> None:
                 "text": getattr(result, "output_text", None) or None,
                 "tool_calls": tool_calls,
             },
+            "response_raw": _raw_dump(result),
         }
     )
     _set_responses_usage(handle, getattr(result, "usage", None))

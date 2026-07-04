@@ -18,7 +18,8 @@ import time
 from traceburn import session, span, trace
 
 
-def fake_llm_call(name, model, input_tokens, output_tokens, cached_input_tokens=0):
+def fake_llm_call(name, model, input_tokens, output_tokens, cached_input_tokens=0, prompt=None):
+    prompt = prompt or f"({name} prompt)"
     attributes = {
         "gen_ai.system": "openai",
         "gen_ai.request.model": model,
@@ -26,8 +27,9 @@ def fake_llm_call(name, model, input_tokens, output_tokens, cached_input_tokens=
         "gen_ai.usage.input_tokens": input_tokens,
         "gen_ai.usage.output_tokens": output_tokens,
         "cached_input_tokens": cached_input_tokens,
-        "request": {"messages": [{"role": "user", "content": f"({name} prompt)"}]},
+        "request": {"messages": [{"role": "user", "content": prompt}]},
         "response": {"text": f"({name} response)"},
+        "request_hash": f"demo-{hash(prompt) & 0xFFFFFFFF:08x}",
         "finish_reason": "stop",
         "stream": False,
     }
@@ -44,8 +46,13 @@ def run_agent(question):
         time.sleep(random.uniform(0.2, 0.4))
     with span("retrieve-chunks", kind="retrieval"):
         time.sleep(random.uniform(0.03, 0.08))
-    for page in (1, 2):
-        fake_llm_call(f"summarize-page-{page}", "gpt-5-mini", 6_400, 400)
+    # A classic agent bug, on purpose: page 1 gets summarized twice, so the
+    # waste report has something real to show you.
+    for page in (1, 1, 2):
+        fake_llm_call(
+            f"summarize-page-{page}", "gpt-5-mini", 6_400, 400,
+            prompt=f"Summarize the following page:\n(page {page} contents)",
+        )
     fake_llm_call("synthesize", "gpt-5", 9_200, 880, cached_input_tokens=4_100)
     fake_llm_call("format-title", "gpt-5", 140, 12)
 

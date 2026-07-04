@@ -32,7 +32,7 @@ DEFAULT_DB_DIR = ".traceburn"
 DEFAULT_DB_NAME = "traces.db"
 
 # Attribute keys whose values are externalized to the blobs table.
-BLOB_KEYS = ("request", "response")
+BLOB_KEYS = ("request", "response", "response_raw")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -337,10 +337,12 @@ class Store:
                 ),
             )
 
-    def _row_to_span(self, row: sqlite3.Row, hydrate: bool) -> Span:
+    def _row_to_span(
+        self, row: sqlite3.Row, hydrate: bool, hydrate_keys: tuple = BLOB_KEYS
+    ) -> Span:
         attributes = json.loads(row["attributes"])
         if hydrate:
-            for key in BLOB_KEYS:
+            for key in hydrate_keys:
                 ref = attributes.get(key)
                 if isinstance(ref, dict) and "$blob" in ref:
                     attributes[key] = self.get_blob_json(ref["$blob"])
@@ -365,12 +367,14 @@ class Store:
             ).fetchone()
             return self._row_to_span(row, hydrate) if row else None
 
-    def get_spans(self, trace_id: str, hydrate: bool = True) -> list[Span]:
+    def get_spans(
+        self, trace_id: str, hydrate: bool = True, hydrate_keys: tuple = BLOB_KEYS
+    ) -> list[Span]:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT * FROM spans WHERE trace_id = ? ORDER BY start_ns", (trace_id,)
             ).fetchall()
-            return [self._row_to_span(r, hydrate) for r in rows]
+            return [self._row_to_span(r, hydrate, hydrate_keys) for r in rows]
 
     def find_spans_by_request_hash(
         self, request_hash: str, session_id: str | None = None, hydrate: bool = False

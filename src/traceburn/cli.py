@@ -2,6 +2,8 @@
 
     traceburn ls                   recent sessions and traces
     traceburn show <trace_id>      span tree with timing, tokens, and cost
+    traceburn waste <trace_id>     efficiency report with avoidable spend
+    traceburn diff <a> <b>         compare two runs step by step
 
 Trace ids can be abbreviated to any unique prefix. The database path comes
 from --db, the TRACEBURN_DB environment variable, or ./.traceburn/traces.db,
@@ -162,6 +164,113 @@ def cmd_show(store: Store, args: argparse.Namespace) -> None:
         print(_span_line(span, 1))
 
 
+def cmd_waste(store: Store, args: argparse.Namespace) -> None:
+    from .analyze import waste
+
+    trace = _resolve_trace(store, args.trace_id)
+    result = waste.report(store, trace.trace_id)
+    print(f"trace {trace.trace_id[:12]}  '{trace.name}'")
+    print(result["headline"])
+    if not result["findings"]:
+        return
+    print()
+    for finding in result["findings"]:
+        amounts = []
+        if finding["avoidable_usd"]:
+            amounts.append(f"~{_format_cost(finding['avoidable_usd'])} avoidable")
+        if finding["avoidable_tokens"]:
+            amounts.append(f"{finding['avoidable_tokens']} tokens")
+        if finding["avoidable_seconds"]:
+            amounts.append(f"{finding['avoidable_seconds']:.1f}s")
+        amount_txt = f"  [{', '.join(amounts)}]" if amounts else ""
+        print(
+            f"{finding['severity'].upper():<6} {finding['rule_id']:<15} "
+            f"{finding['summary']}{amount_txt}"
+        )
+        print(f"       {finding['explanation']}")
+        if finding["span_ids"]:
+            shown = ", ".join(s[:10] for s in finding["span_ids"][:6])
+            more = len(finding["span_ids"]) - 6
+            print(f"       spans: {shown}{f' (+{more} more)' if more > 0 else ''}")
+        print(f"       confidence: {finding['confidence']}; figures are estimates")
+        print()
+
+
+def cmd_diff(store: Store, args: argparse.Namespace) -> None:
+    from .analyze.diff import diff_traces
+
+    trace_a = _resolve_trace(store, args.trace_a)
+    trace_b = _resolve_trace(store, args.trace_b)
+    result = diff_traces(store, trace_a.trace_id, trace_id_b=trace_b.trace_id)
+
+    totals_a, totals_b = result["totals_a"], result["totals_b"]
+    print(f"a: {trace_a.trace_id[:12]} '{trace_a.name}'   b: {trace_b.trace_id[:12]} '{trace_b.name}'")
+    print(
+        f"{'':>14}{'spans':>8}{'llm':>6}{'errors':>8}{'time':>10}{'tokens in/out':>16}{'est. cost':>11}"
+    )
+    for label, totals in (("a", totals_a), ("b", totals_b)):
+        print(
+            f"{label:>14}{totals['spans']:>8}{totals['llm_calls']:>6}{totals['errors']:>8}"
+            f"{totals['duration_ms'] / 1000:>9.1f}s"
+            f"{str(totals['input_tokens']) + '/' + str(totals['output_tokens']):>16}"
+            f"{_format_cost(totals['cost_usd']):>11}"
+        )
+    delta_cost = totals_b["cost_usd"] - totals_a["cost_usd"]
+    delta_ms = totals_b["duration_ms"] - totals_a["duration_ms"]
+    cost_txt = f"{delta_cost:+.4f}$" if abs(delta_cost) >= 5e-5 else "no change"
+    print(f"{'delta':>14}{'':>8}{'':>6}{'':>8}{delta_ms / 1000:>+9.1f}s{'':>16}{cost_txt:>11}")
+    print()
+
+    def _significant(m):
+        deltas = m["deltas"]
+        return (
+            abs(deltas["duration_ms"]) >= 50
+            or abs(deltas["cost_usd"]) >= 5e-5
+            or deltas["input_tokens"] != 0
+            or deltas["output_tokens"] != 0
+            or "request_diff" in m
+            or "response_diff" in m
+        )
+
+    changed = [m for m in result["matched"] if _significant(m)]
+    if changed:
+        print("changed steps")
+        for m in changed:
+            deltas = m["deltas"]
+            bits = []
+            if deltas["duration_ms"]:
+                bits.append(f"{deltas['duration_ms'] / 1000:+.2f}s")
+            if deltas["cost_usd"]:
+                bits.append(f"{deltas['cost_usd']:+.4f}$")
+            if deltas["input_tokens"]:
+                bits.append(f"{deltas['input_tokens']:+d} in")
+            if deltas["output_tokens"]:
+                bits.append(f"{deltas['output_tokens']:+d} out")
+            marks = []
+            if "request_diff" in m:
+                marks.append("prompt changed")
+            if "response_diff" in m:
+                marks.append("output changed")
+            suffix = f"  ({'; '.join(marks)})" if marks else ""
+            print(f"  {m['name']:<36} {', '.join(bits) if bits else 'no metric change'}{suffix}")
+        if args.verbose:
+            for m in changed:
+                for key in ("request_diff", "response_diff"):
+                    if key in m:
+                        print(f"\n--- {m['name']} {key.replace('_', ' ')} ---")
+                        for line in m[key][:60]:
+                            print(f"  {line}")
+    for label, items in (("only in b (added)", result["added"]), ("only in a (removed)", result["removed"])):
+        if items:
+            print(f"\n{label}")
+            for brief in items:
+                print(
+                    f"  {brief['name']:<36} {brief['kind']:<9} "
+                    f"{_format_duration(int(brief['duration_ms'] * 1e6)) if brief['duration_ms'] else '-':>8} "
+                    f"{_format_cost(brief['cost_usd']):>10}"
+                )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="traceburn",
@@ -178,6 +287,18 @@ def main(argv: list[str] | None = None) -> int:
     show_parser = sub.add_parser("show", help="print one trace as a span tree")
     show_parser.add_argument("trace_id", help="trace id or unique prefix")
     show_parser.set_defaults(func=cmd_show)
+
+    waste_parser = sub.add_parser("waste", help="efficiency report for one trace")
+    waste_parser.add_argument("trace_id", help="trace id or unique prefix")
+    waste_parser.set_defaults(func=cmd_waste)
+
+    diff_parser = sub.add_parser("diff", help="compare two traces")
+    diff_parser.add_argument("trace_a", help="baseline trace id or prefix")
+    diff_parser.add_argument("trace_b", help="comparison trace id or prefix")
+    diff_parser.add_argument(
+        "-v", "--verbose", action="store_true", help="include prompt and response text diffs"
+    )
+    diff_parser.set_defaults(func=cmd_diff)
 
     args = parser.parse_args(argv)
     db_path = args.db or default_db_path()
