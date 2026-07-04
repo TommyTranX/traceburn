@@ -187,3 +187,18 @@ def test_stored_attributes_are_valid_json_for_sqlite(store):
     (valid,) = conn.execute("SELECT json_valid(attributes) FROM spans").fetchone()
     conn.close()
     assert valid == 1
+
+
+def test_find_traces_escapes_like_wildcards(store):
+    trace_id = "abc1234" + "0" * 25
+    store.insert_trace(Trace(trace_id=trace_id, name="run", start_ns=0))
+    assert len(store.find_traces("abc1")) == 1
+    assert store.find_traces("ab_1") == []
+    assert store.find_traces("%") == []
+    assert store.find_traces("") == []
+
+
+def test_sets_sanitize_deterministically(store):
+    from traceburn.store import _sanitize
+
+    assert _sanitize({"stop": {"b", "a", "c"}}) == {"stop": ["a", "b", "c"]}

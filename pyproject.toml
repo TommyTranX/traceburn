@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+traceburn = "traceburn.cli:main"
+
 [project.optional-dependencies]
 ui = []
 otel = []

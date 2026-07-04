@@ -123,7 +123,11 @@ def _sanitize(value: Any, seen: set[int] | None = None, depth: int = 0) -> Any:
         if id(value) in seen:
             return "<circular>"
         seen.add(id(value))
-        out = [_sanitize(v, seen, depth + 1) for v in value]
+        items = value
+        if isinstance(value, (set, frozenset)):
+            # Deterministic order so hashes are stable across processes.
+            items = sorted(value, key=str)
+        out = [_sanitize(v, seen, depth + 1) for v in items]
         seen.discard(id(value))
         return out
     return str(value)
@@ -223,6 +227,48 @@ class Store:
                 "SELECT * FROM traces WHERE trace_id = ?", (trace_id,)
             ).fetchone()
         return Trace(**dict(row)) if row else None
+
+    def find_traces(self, trace_id_prefix: str) -> list[Trace]:
+        """Traces whose id starts with the given prefix (CLI convenience)."""
+        if not trace_id_prefix:
+            return []
+        escaped = (
+            trace_id_prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM traces WHERE trace_id LIKE ? ESCAPE '\\' "
+                "ORDER BY start_ns DESC",
+                (escaped + "%",),
+            ).fetchall()
+        return [Trace(**dict(r)) for r in rows]
+
+    def count_traces(self, session_id: str) -> int:
+        with self._lock:
+            (count,) = self._conn.execute(
+                "SELECT COUNT(*) FROM traces WHERE session_id = ?", (session_id,)
+            ).fetchone()
+        return count
+
+    def trace_stats(self, trace_id: str) -> dict:
+        """Aggregates for one trace: span counts, errors, tokens, cost."""
+        with self._lock:
+            row = self._conn.execute(
+                """
+                SELECT
+                  COUNT(*) AS span_count,
+                  SUM(CASE WHEN kind = 'llm' THEN 1 ELSE 0 END) AS llm_count,
+                  SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) AS error_count,
+                  SUM(COALESCE(json_extract(attributes, '$.cost_usd'), 0)) AS cost_usd,
+                  SUM(COALESCE(json_extract(attributes, '$."gen_ai.usage.input_tokens"'), 0)
+                      + COALESCE(json_extract(attributes, '$.cached_input_tokens'), 0)
+                      + COALESCE(json_extract(attributes, '$.cache_write_tokens'), 0)) AS input_tokens,
+                  SUM(COALESCE(json_extract(attributes, '$."gen_ai.usage.output_tokens"'), 0)) AS output_tokens
+                FROM spans WHERE trace_id = ?
+                """,
+                (trace_id,),
+            ).fetchone()
+        return dict(row)
 
     def list_traces(self, limit: int = 50, session_id: str | None = None) -> list[Trace]:
         with self._lock:

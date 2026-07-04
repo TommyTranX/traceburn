@@ -16,10 +16,11 @@ Quick use:
             docs = retriever(query)
         answer = plan(state)
 
-Automatic client instrumentation (``traceburn.install()``) arrives with the
-instrumentation modules; the explicit API above is stable now.
+Or zero-config: ``traceburn.install()`` patches whichever of the openai and
+anthropic clients are installed, and every call they make is recorded.
 """
 
+from .instrument import install, uninstall
 from .pricing import ModelPrice, PricingTable
 from .recorder import (
     Recorder,
@@ -53,7 +54,9 @@ __all__ = [
     "current_session",
     "current_span",
     "get_recorder",
+    "install",
     "session",
     "span",
     "trace",
+    "uninstall",
 ]
