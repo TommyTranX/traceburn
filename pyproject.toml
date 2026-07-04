@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "traceburn"
+version = "0.1.0.dev0"
+description = "Local-first tracer and efficiency profiler for AI agents: cost and latency flamegraphs, deterministic replay, run diffs, and waste detection over one SQLite file."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Tommy Tran", email = "tommy.tranxhec@gmail.com" }]
+keywords = ["llm", "agents", "tracing", "observability", "profiling", "cost"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: System :: Monitoring",
+]
+dependencies = []
+
+[project.optional-dependencies]
+ui = []
+otel = []
+all = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/traceburn"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
