@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "traceburn"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Local-first tracer and efficiency profiler for AI agents: cost and latency flamegraphs, deterministic replay, run diffs, and waste detection over one SQLite file."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,16 +21,24 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+Homepage = "https://github.com/TommyTranX/traceburn"
+Repository = "https://github.com/TommyTranX/traceburn"
+Issues = "https://github.com/TommyTranX/traceburn/issues"
+
 [project.scripts]
 traceburn = "traceburn.cli:main"
 
 [project.optional-dependencies]
-ui = []
-otel = []
-all = []
+ui = ["starlette>=0.37", "uvicorn>=0.29"]
+all = ["traceburn[ui]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/traceburn"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"hooks/traceburn_autoinstall.py" = "traceburn_autoinstall.py"
+"hooks/traceburn_autoinstall.pth" = "traceburn_autoinstall.pth"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

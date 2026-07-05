@@ -1,5 +1,6 @@
 """Terminal viewer: the fast path into a trace database.
 
+    traceburn ui                   open the web viewer at 127.0.0.1:8765
     traceburn ls                   recent sessions and traces
     traceburn show <trace_id>      span tree with timing, tokens, and cost
     traceburn waste <trace_id>     efficiency report with avoidable spend
@@ -271,6 +272,17 @@ def cmd_diff(store: Store, args: argparse.Namespace) -> None:
                 )
 
 
+def cmd_ui(store: Store, args: argparse.Namespace) -> None:
+    store.close()
+    try:
+        from .ui.server import serve
+    except ImportError:
+        raise SystemExit(
+            "the web viewer needs the [ui] extra: pip install 'traceburn[ui]'"
+        )
+    serve(db_path=store.path, port=args.port, open_browser=not args.no_browser)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="traceburn",
@@ -279,6 +291,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", help="path to the trace database", default=None)
     parser.add_argument("--version", action="version", version=f"traceburn {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    ui_parser = sub.add_parser("ui", help="open the local web viewer")
+    ui_parser.add_argument("-p", "--port", type=int, default=8765)
+    ui_parser.add_argument("--no-browser", action="store_true")
+    ui_parser.set_defaults(func=cmd_ui)
 
     ls_parser = sub.add_parser("ls", help="list recent sessions and traces")
     ls_parser.add_argument("-n", "--limit", type=int, default=20)

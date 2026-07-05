@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>traceburn</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <span class="logo">traceburn</span>
+    <span id="meta" class="meta"></span>
+  </header>
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="side-head">traces</div>
+      <ul id="trace-list"></ul>
+    </aside>
+    <main>
+      <div id="trace-header" class="trace-header hidden">
+        <div id="trace-title"></div>
+        <div id="trace-stats" class="muted"></div>
+      </div>
+      <nav id="tabs" class="tabs hidden">
+        <button data-tab="tree" class="active">Tree</button>
+        <button data-tab="flame">Flamegraph</button>
+        <button data-tab="waterfall">Waterfall</button>
+        <button data-tab="waste">Waste</button>
+        <button data-tab="diff">Diff</button>
+      </nav>
+      <section id="view"></section>
+      <div id="empty" class="empty">
+        <p>No trace selected.</p>
+        <p class="muted">Record one, then pick it on the left. Quickest start:
+        <code>python examples/offline_demo.py</code></p>
+      </div>
+    </main>
+  </div>
+  <div id="detail" class="detail hidden">
+    <div class="detail-head">
+      <span id="detail-title"></span>
+      <button id="detail-close">close</button>
+    </div>
+    <div id="detail-body"></div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -41,8 +41,9 @@ iterating on one step of a larger recorded run.
 
 - Streaming requests are not replayable in this version; they follow the
   `on_miss` policy. Record the call non-streaming to replay it.
-- Replayed calls do not write new spans; the replayed run is not itself a
-  recorded trace.
+- LLM calls served from the store do not write new spans. Explicit spans
+  (``@trace``, ``span()``, ``session()``) in your agent code still record,
+  so a replayed run leaves a trace of its structure with zero LLM spend.
 - Recordings made before response payloads were stored (or with capture
   errors) are skipped at index build time; `Replayer.recorded_calls` says
   how many calls are servable.

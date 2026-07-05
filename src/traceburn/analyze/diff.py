@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import math
 from typing import Any
 
 from ..schema import Span
@@ -33,9 +34,10 @@ def _tree(spans: list[Span]) -> dict[str | None, list[Span]]:
 def _metric(span: Span, key: str) -> float:
     value = span.attributes.get(key)
     try:
-        return float(value) if value is not None else 0.0
+        parsed = float(value) if value is not None else 0.0
     except (TypeError, ValueError):
         return 0.0
+    return parsed if math.isfinite(parsed) else 0.0
 
 
 def _duration_ms(span: Span) -> float:

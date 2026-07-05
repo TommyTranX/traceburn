@@ -23,36 +23,55 @@ The `Finding` JSON schema is a public interface (see `schema.py`).
 ## duplicates
 
 Fires when the same normalized request was sent more than once and every
-attempt succeeded. Exact duplicates share a request hash; the repeats are
-counted at their recorded cost, confidence high. Near-duplicates share a
-model and at least 90 percent of their prompt vocabulary (token-set Jaccard)
-without sharing a hash; confidence medium.
+attempt succeeded. Exact duplicates share a request hash. When the recorded
+responses are identical too, the repeats are counted at their recorded cost
+with high confidence. When the responses differ and the request did not
+sample (temperature zero or unset), the finding drops to medium confidence
+and says so. When the responses differ under explicit sampling
+(temperature above zero), nothing is flagged: that is best-of-n on purpose.
 
-Silent when: requests differ, repeats involve errors (that is a retry storm,
-see loops), or prompts are under 100 tokens (too small to matter and too
-easy to collide).
+Near-duplicates share a model and the same message count, and after the
+pairwise common prefix is stripped, at least 90 percent of the remaining
+prompt vocabulary matches (token-set Jaccard on the remainders). Stripping
+the shared prefix first keeps templated agents (same big system prompt,
+different payload) from being flagged; a shared static prefix is the cache
+rule's business. Confidence medium.
+
+Silent when: requests genuinely differ in the part that matters, repeats
+involve errors (that is a retry storm, see loops), message counts differ
+(an agent loop extending its history), or prompts are under 100 tokens.
 
 ## cache
 
-Fires when two or more calls to the same model, within a ten-minute window,
-share a stable prefix of at least 1024 estimated tokens and none of them
-read from or wrote to a prompt cache. The saving is the repeats' prefix
-tokens priced at the input rate minus the cached rate; where the provider
-bills cache writes, the first call's write premium is subtracted. If the
-pricing table has no cache rates for the model, no dollar figure is claimed.
+Fires when two or more calls to the same model, within a five-minute
+window (the shortest cache lifetime either major provider prices by
+default), share a stable prefix long enough to cache and none of them read
+from or wrote to a prompt cache. The minimum prefix is provider-dependent:
+1024 estimated tokens for openai, 4096 for anthropic and for unknown
+providers (anthropic's per-model minimums reach 4096, so the rule uses the
+conservative bound). The saving is the repeats' prefix tokens priced at
+the input rate minus the cached rate; where the provider bills cache
+writes, the first call's write premium is subtracted. If the pricing table
+has no cache rates for the model, no dollar figure is claimed.
 
 Silent when: any call in the window used the cache, the shared prefix is
-short, the calls are far apart, or there is only one call.
+below the provider's minimum, the calls are far apart, or there is only
+one call.
 
 ## context_bloat
 
-Two checks. First, duplicate blocks inside one request: the same text block
-(200+ characters) sent twice in a single prompt, usually history
-re-appending or a retriever returning the same chunk twice; the repeated
-tokens are priced at the model's input rate, confidence high. Second,
-prompt dominance: a call with at least 8000 prompt tokens producing under
-2 percent of that in output; informational only, no dollar claim, because
-how much context the output actually needed is a judgment call.
+Two checks. First, duplicate blocks inside one request: the same text
+block (200+ characters) appearing more than once in a single prompt,
+usually history re-appending or a retriever returning the same chunk
+twice, with at least 256 repeated tokens in total. The repeated tokens are
+priced at the model's input rate (or the cached rate when the span shows
+the prompt was cache-served), confidence high. Second, prompt dominance: a
+call with at least 8000 prompt tokens producing under 2 percent of that in
+output; informational only, no dollar claim, because how much context the
+output actually needed is a judgment call.
+
+Silent when: repeated blocks total under 256 tokens in a request, or the
+prompt-to-output ratio is unremarkable.
 
 ## model_overkill
 
@@ -68,8 +87,10 @@ suggestion: quality on the cheaper model must be verified by a human.
 Three checks. Retry storms: identical requests attempted more than once
 with at least one error among them; reports the wall-clock burned by failed
 attempts, and dollars only if the error spans carry cost. Repeated tool
-calls: a tool span with identical recorded arguments three or more times.
-Runaway step count: more than 50 LLM calls in one trace, informational.
+calls: a tool span carrying its arguments under the request attribute (the
+documented convention), identical three or more times; spans without a
+request attribute are never flagged. Runaway step count: more than 50 LLM
+calls in one trace, informational.
 
 ## Adding a rule
 

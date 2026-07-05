@@ -8,6 +8,7 @@ token or time quantity alone rather than inventing a number.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,9 +44,10 @@ def model(span: Span) -> str | None:
 def cost(span: Span) -> float:
     value = span.attributes.get("cost_usd")
     try:
-        return float(value) if value is not None else 0.0
+        parsed = float(value) if value is not None else 0.0
     except (TypeError, ValueError):
         return 0.0
+    return parsed if math.isfinite(parsed) else 0.0
 
 
 def prompt_tokens(span: Span) -> int:

@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use traceburn in your work, please cite it as below."
+title: "traceburn: a local-first tracer and efficiency profiler for AI agents"
+type: software
+authors:
+  - family-names: "Tran"
+    given-names: "Tommy"
+    email: "tommy.tranxhec@gmail.com"
+repository-code: "https://github.com/TommyTranX/traceburn"
+license: MIT
+version: 0.1.0
+date-released: "2026-07-05"
+keywords:
+  - AI agents
+  - LLM observability
+  - tracing
+  - profiling
+  - cost efficiency

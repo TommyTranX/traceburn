@@ -9,6 +9,7 @@ zero because concurrent children can legitimately overlap their parent.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from ..schema import Span
@@ -25,9 +26,12 @@ def _duration(span: Span) -> int:
 def _cost(span: Span) -> float:
     value = span.attributes.get("cost_usd")
     try:
-        return float(value) if value is not None else 0.0
+        cost = float(value) if value is not None else 0.0
     except (TypeError, ValueError):
         return 0.0
+    # The store sanitizes non-finite floats to strings, which float() would
+    # happily parse back into nan; keep JSON output JSON-serializable.
+    return cost if math.isfinite(cost) else 0.0
 
 
 def fold(spans: list[Span], weight: str = "latency") -> dict[str, Any]:
