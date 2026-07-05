@@ -79,10 +79,12 @@ def test_duplicates_silent_on_distinct_calls(pricing):
     assert duplicates.run(ctx_for(spans, pricing)) == []
 
 
-def test_near_duplicates_detected_by_jaccard(pricing):
-    base = ["word%d" % i for i in range(97)]
-    text_a = " ".join(base + ["alpha", "beta", "gamma"])
-    text_b = " ".join(base + ["delta", "epsilon", "zeta"])
+def test_near_duplicates_detected_on_in_place_edit(pricing):
+    base = ["word%d" % i for i in range(100)]
+    edited = list(base)
+    edited[3] = "changed"
+    text_a = " ".join(base)
+    text_b = " ".join(edited)
     spans = [
         llm_span(req_hash="h1", in_tok=200, cost=0.02,
                  request={"messages": [{"role": "user", "content": text_a}]}),
@@ -93,6 +95,16 @@ def test_near_duplicates_detected_by_jaccard(pricing):
     assert len(findings) == 1
     assert findings[0].confidence == "medium"
     assert findings[0].avoidable_usd == pytest.approx(0.02)
+
+
+def test_near_duplicates_silent_on_shared_template_different_payload(pricing):
+    template = "policy manual text " * 200
+    spans = [
+        llm_span(req_hash=f"h{i}", in_tok=1000, start_ms=i * 100,
+                 request={"messages": [{"role": "user", "content": template + tail}]})
+        for i, tail in enumerate(["ticket about billing", "ticket about sso loops"])
+    ]
+    assert duplicates.run(ctx_for(spans, pricing)) == []
 
 
 def test_near_duplicates_silent_on_different_prompts(pricing):
@@ -439,3 +451,29 @@ def test_message_texts_include_tool_traffic():
     texts = "\n".join(message_texts(request))
     assert "NYC" in texts
     assert "72F and sunny" in texts
+
+
+def test_message_texts_handle_system_block_list():
+    from traceburn.analyze.waste._common import message_texts
+
+    request = {
+        "system": [{"type": "text", "text": "policy manual text", "cache_control": {"type": "ephemeral"}}],
+        "messages": [{"role": "user", "content": "ticket"}],
+    }
+    texts = message_texts(request)
+    assert texts[0] == "policy manual text"
+
+
+def test_cache_rule_fires_with_system_block_list(pricing):
+    prefix = "policy manual section " * 900  # ~4950 estimated tokens
+    spans = [
+        llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
+                 start_ms=i * 1000, in_tok=5100,
+                 request={
+                     "system": [{"type": "text", "text": prefix}],
+                     "messages": [{"role": "user", "content": f"ticket {i}"}],
+                 })
+        for i in range(3)
+    ]
+    findings = cache.run(ctx_for(spans, pricing))
+    assert len(findings) == 1

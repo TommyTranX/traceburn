@@ -152,10 +152,20 @@ def diff_traces(
     matched_pairs: list[tuple[Span, Span]] = []
     added: list[Span] = []
     removed: list[Span] = []
-    _match_level(
-        tree_a.get(None, []), tree_b.get(None, []),
-        tree_a, tree_b, matched_pairs, added, removed,
-    )
+    roots_a, roots_b = tree_a.get(None, []), tree_b.get(None, [])
+    if len(roots_a) == 1 and len(roots_b) == 1:
+        # Comparing two runs implies their roots correspond, even when the
+        # run was renamed between recordings.
+        matched_pairs.append((roots_a[0], roots_b[0]))
+        _match_level(
+            tree_a.get(roots_a[0].span_id, []),
+            tree_b.get(roots_b[0].span_id, []),
+            tree_a, tree_b, matched_pairs, added, removed,
+        )
+    else:
+        _match_level(
+            roots_a, roots_b, tree_a, tree_b, matched_pairs, added, removed,
+        )
 
     matched = []
     for span_a, span_b in matched_pairs:

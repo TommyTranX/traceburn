@@ -9,11 +9,14 @@ Retry storms (duplicates involving errors) belong to the loops rule and are
 excluded here.
 
 Near-duplicates share a model, the same message count, and almost all of
-their prompt text (token-set Jaccard at or above 0.9) without sharing a
-hash. Requiring an equal message count keeps a normal agent loop, where
-each turn extends the same history, from being flagged: those calls are
-the cache rule's business, not duplication. Confidence is medium and only
-the repeat cost is claimed.
+what remains of their prompts after the pairwise common prefix is stripped
+(token-set Jaccard at or above 0.9 on the remainders). Stripping the shared
+prefix first matters: templated agents send the same large system prompt
+with a different payload each time, and the payload is the part that
+carries meaning. A shared static prefix is the cache rule's business, not
+duplication; an agent loop that extends the same history each turn is
+excluded by the equal-message-count requirement. Confidence is medium and
+only the repeat cost is claimed.
 """
 
 from __future__ import annotations
@@ -45,6 +48,24 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
     return len(a & b) / len(a | b)
+
+
+def _remainders_similar(text_a: str, text_b: str) -> bool:
+    """Near-duplicate test on the parts that differ.
+
+    Strip the common character prefix, then compare the remainders. Two
+    templated prompts with different payloads have dissimilar remainders
+    and are NOT near-duplicates, however large the shared template.
+    """
+    limit = min(len(text_a), len(text_b))
+    i = 0
+    while i < limit and text_a[i] == text_b[i]:
+        i += 1
+    set_a, set_b = _token_set(text_a[i:]), _token_set(text_b[i:])
+    if not set_a or not set_b:
+        # One prompt extends the other; that is prefix reuse, not a resend.
+        return False
+    return _jaccard(set_a, set_b) >= JACCARD_THRESHOLD
 
 
 def _response_key(span) -> str:
@@ -128,8 +149,8 @@ def run(ctx: RuleContext) -> list[Finding]:
         if s.span_id not in claimed
         and prompt_tokens(s) >= MIN_NEAR_DUP_TOKENS
     ]
-    token_sets = {
-        s.span_id: _token_set(request_text(s.attributes.get("request"))) for s in remainder
+    texts = {
+        s.span_id: request_text(s.attributes.get("request")) for s in remainder
     }
     used = set()
     for i, span_a in enumerate(remainder):
@@ -148,7 +169,7 @@ def run(ctx: RuleContext) -> list[Finding]:
                 span_b.attributes.get("request")
             ):
                 continue
-            if _jaccard(token_sets[span_a.span_id], token_sets[span_b.span_id]) >= JACCARD_THRESHOLD:
+            if _remainders_similar(texts[span_a.span_id], texts[span_b.span_id]):
                 group.append(span_b)
         if len(group) >= 2:
             used.update(s.span_id for s in group)

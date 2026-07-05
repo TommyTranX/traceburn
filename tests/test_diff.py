@@ -111,3 +111,12 @@ def test_diff_totals(store):
     assert result["totals_b"]["cost_usd"] == 0.02
     assert result["totals_a"]["input_tokens"] == 500
     assert result["totals_b"]["output_tokens"] == 80
+
+
+def test_single_roots_match_despite_rename(store):
+    a = build_trace(store, [("run-before", "agent", {}), ("plan", "llm", llm_attrs(500, 50, 0.01))])
+    b = build_trace(store, [("run-after", "agent", {}), ("plan", "llm", llm_attrs(500, 50, 0.005))])
+    result = diff_traces(store, a, trace_id_b=b)
+    assert result["added"] == [] and result["removed"] == []
+    plan = next(m for m in result["matched"] if m["name"] == "plan")
+    assert abs(plan["deltas"]["cost_usd"] + 0.005) < 1e-9

@@ -110,6 +110,11 @@ def message_texts(request: Any) -> list[str]:
     system = request.get("system") or request.get("instructions")
     if isinstance(system, str) and system:
         texts.append(system)
+    elif isinstance(system, list):
+        # anthropic system prompts are a block list whenever cache_control
+        # is involved; the text inside is still prefix content.
+        for block in system:
+            _block_texts(block, texts)
     raw_input = request.get("input")
     if isinstance(raw_input, str) and raw_input:
         texts.append(raw_input)
