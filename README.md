@@ -18,6 +18,8 @@ cents and a couple of minutes, at
 [examples/cache_before_after.py](https://github.com/TommyTranX/traceburn/blob/main/examples/cache_before_after.py).
 Measured 2026-07-05.
 
+![traceburn's waste report on the uncached run: $0.0539 total, about 82 percent flagged avoidable, with the repeated 5,618-token prefix identified as the cause](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/waste-report.png)
+
 That's the whole pitch in one run. traceburn is a local-first tracer and efficiency profiler for
 AI agents, built on top of the openai and anthropic Python SDKs: a cost and latency flamegraph, a
 waste report that quantifies avoidable spend instead of just gesturing at it, deterministic replay
@@ -81,6 +83,8 @@ latency, and cost attached, no code changes required past that one line. Want ma
 instead, or you're using a framework outside the two supported SDKs? The explicit API, `@trace`,
 `span()`, and `session()`, works by hand with anything.
 
+![traceburn's expandable trace tree, showing an agent's nested spans with per-call tokens and cost](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/trace-tree.png)
+
 **Flamegraph.** Spans render as a flamegraph you can size two ways: by wall-clock time or by
 dollars spent, with self-time kept separate from time spent in children, so a slow parent span
 doesn't hide which child call actually burned the seconds or the money.
@@ -107,6 +111,10 @@ a waterfall timeline, the waste report, and the run diff view.
 It binds to 127.0.0.1 only and checks the request's host header against DNS rebinding, but it has
 no authentication of any kind. That's a deliberate tradeoff: the viewer isn't meant to be reachable
 from anywhere but your own machine.
+
+![traceburn's flamegraph view of an agent run, one row per depth, frame width proportional to latency](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/flamegraph.png)
+
+![traceburn's waterfall view of the same run, a timeline of every call with its duration and cost](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/waterfall.png)
 
 ## Framework support
 
