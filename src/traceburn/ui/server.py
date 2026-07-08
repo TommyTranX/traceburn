@@ -8,7 +8,9 @@ return (span dicts, flamegraph folds, waste reports, diffs).
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Callable
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -39,7 +41,15 @@ def _limit(request: Request, default: int, ceiling: int = 1000) -> int:
     return max(1, min(value, ceiling))
 
 
-def create_app(db_path: str | None = None) -> Starlette:
+def create_app(db_path: str | None = None, on_startup: Callable[[], None] | None = None) -> Starlette:
+    """Build the Starlette app.
+
+    ``on_startup``, when given, runs once the ASGI server has actually
+    started (Starlette's only supported hook for this is the ``lifespan``
+    context manager; the old ``add_event_handler``/``on_event`` API this
+    version once used was removed). ``serve()`` uses it to open a browser
+    only after a successful bind, never on a port that failed to open.
+    """
     store = Store(db_path)
 
     def meta(request: Request) -> JSONResponse:
@@ -122,6 +132,12 @@ def create_app(db_path: str | None = None) -> Starlette:
     def index(request: Request) -> FileResponse:
         return FileResponse(STATIC_DIR / "index.html")
 
+    @asynccontextmanager
+    async def lifespan(app: Starlette):
+        if on_startup is not None:
+            on_startup()
+        yield
+
     return Starlette(
         routes=[
             Route("/", index),
@@ -137,6 +153,7 @@ def create_app(db_path: str | None = None) -> Starlette:
             Mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static"),
         ],
         middleware=[Middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)],
+        lifespan=lifespan,
     )
 
 
@@ -146,11 +163,10 @@ def serve(db_path: str | None = None, port: int = 8765, open_browser: bool = Tru
 
     import uvicorn
 
-    app = create_app(db_path)
     url = f"http://127.0.0.1:{port}"
-    if open_browser:
-        # Fires only once uvicorn has actually bound and started; a failed
-        # bind must not open a browser at someone else's server.
-        app.add_event_handler("startup", lambda: webbrowser.open(url))
+    # Fires only once uvicorn has actually bound and started; a failed
+    # bind must not open a browser at someone else's server.
+    on_startup = (lambda: webbrowser.open(url)) if open_browser else None
+    app = create_app(db_path, on_startup=on_startup)
     print(f"traceburn viewer at {url} (ctrl-c to stop)")
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")

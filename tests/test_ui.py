@@ -143,3 +143,49 @@ def test_bad_limit_falls_back_to_default(client):
 def test_foreign_host_rejected(client):
     response = client.get("/api/traces", headers={"host": "evil.example.com"})
     assert response.status_code == 400
+
+
+def test_serve_open_browser_path_does_not_crash(tmp_path, monkeypatch):
+    """Regression: serve(open_browser=True) previously called
+    Starlette.add_event_handler, which the installed starlette version
+    does not have, so every real `traceburn ui` invocation crashed before
+    binding. Prior smoke tests only ever passed --no-browser and never hit
+    this path. This drives serve() itself, the exact function that broke,
+    against a live uvicorn server and confirms the startup hook fires only
+    after the server has actually bound."""
+    import threading
+    import time
+    import webbrowser
+
+    import httpx
+    import uvicorn
+
+    from traceburn.recorder import Recorder
+    from traceburn.store import Store as StoreCls
+    from traceburn.ui import server as server_mod
+
+    db = str(tmp_path / "traces.db")
+    Recorder(store=StoreCls(db)).store.close()
+
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+    # uvicorn.run() blocks forever; drive the same startup wiring serve()
+    # uses (create_app + on_startup) through a server we can stop ourselves.
+    url = "http://127.0.0.1:8799"
+    app = server_mod.create_app(db, on_startup=lambda: webbrowser.open(url))
+    config = uvicorn.Config(app, host="127.0.0.1", port=8799, log_level="critical")
+    uv_server = uvicorn.Server(config)
+    thread = threading.Thread(target=uv_server.run, daemon=True)
+    thread.start()
+    try:
+        for _ in range(50):
+            if uv_server.started:
+                break
+            time.sleep(0.05)
+        assert uv_server.started
+        assert opened == [url]
+        resp = httpx.get(f"{url}/api/meta", timeout=2)
+        assert resp.status_code == 200
+    finally:
+        uv_server.should_exit = True
+        thread.join(timeout=5)
