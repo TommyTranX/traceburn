@@ -230,4 +230,4 @@ A citation file is included at
 MIT. Full text at
 [LICENSE](https://github.com/TommyTranX/traceburn/blob/main/LICENSE).
 
-Written by Tommy Tran (tommy.tranxhec@gmail.com).
+Written by Tommy Tran.
