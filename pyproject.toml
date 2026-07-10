@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Tommy Tran", email = "tommy.tranxhec@gmail.com" }]
-keywords = ["llm", "agents", "tracing", "observability", "profiling", "cost"]
+keywords = ["llm", "agents", "tracing", "observability", "profiling", "cost", "litellm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

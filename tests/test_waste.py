@@ -121,7 +121,7 @@ def test_near_duplicates_silent_on_different_prompts(pricing):
 
 
 def big_prefix_request(tail):
-    prefix = "system instructions " * 300  # ~6000 chars, ~1500 estimated tokens
+    prefix = "system instructions " * 900  # ~1800 estimated tokens (real tiktoken, not char/4)
     return {
         "messages": [
             {"role": "system", "content": prefix},
@@ -176,7 +176,7 @@ def test_cache_silent_when_calls_are_far_apart(pricing):
 
 
 def test_context_bloat_fires_on_intra_request_duplicates(pricing):
-    chunk = "retrieved paragraph about the topic " * 40  # ~1440 chars
+    chunk = "retrieved paragraph about the topic " * 100  # ~500 estimated tokens
     request = {
         "messages": [
             {"role": "user", "content": chunk},
@@ -465,7 +465,7 @@ def test_message_texts_handle_system_block_list():
 
 
 def test_cache_rule_fires_with_system_block_list(pricing):
-    prefix = "policy manual section " * 900  # ~4950 estimated tokens
+    prefix = "policy manual section " * 2200  # ~6600 estimated tokens (real tiktoken)
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,
@@ -483,7 +483,7 @@ def test_cache_rule_fires_with_system_block_list(pricing):
 
 
 def test_cache_finding_carries_fix_for_anthropic_plain_system(pricing):
-    prefix = "policy manual section " * 900  # ~4950 estimated tokens, clears anthropic's minimum
+    prefix = "policy manual section " * 2200  # ~6600 estimated tokens, clears anthropic's minimum
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,
@@ -509,7 +509,7 @@ def test_cache_finding_no_fix_for_openai(pricing):
 def test_cache_finding_no_fix_when_system_shorter_than_prefix(pricing):
     # The shared prefix lives mostly in the messages, not the system field;
     # system alone is too short to confidently be the whole fix.
-    shared_block = "shared instructions " * 900  # clears anthropic's minimum on its own
+    shared_block = "shared instructions " * 3300  # ~6600 estimated tokens, clears anthropic's minimum on its own
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,

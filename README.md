@@ -132,12 +132,14 @@ from anywhere but your own machine.
 
 ## Framework support
 
-Today, that means the raw `openai` and `anthropic` Python SDKs, patched automatically by
-`traceburn.install()`. If you're on something else, the explicit `span()` / `trace()` / `session()`
-API works with any framework right now, by hand, since it doesn't care what's making the call.
-LangChain, LlamaIndex, and anything already emitting OpenTelemetry GenAI spans aren't instrumented
-automatically yet. That's real, planned work for v0.2, not something already built and just
-undocumented, and it's covered in the roadmap below.
+Today, that means the raw `openai` and `anthropic` Python SDKs, plus `litellm.completion()` /
+`litellm.acompletion()`, all patched automatically by `traceburn.install()`. The litellm adapter
+records whichever provider litellm actually routed the call to, so a trace made through litellm
+looks the same as one made by calling the SDK directly. If you're on something else, the explicit
+`span()` / `trace()` / `session()` API works with any framework right now, by hand, since it
+doesn't care what's making the call. LangChain, LlamaIndex, and anything already emitting
+OpenTelemetry GenAI spans aren't instrumented automatically yet. That's real, planned work, not
+something already built and just undocumented, and it's covered in the roadmap below.
 
 ## How the waste rules work
 
@@ -190,10 +192,8 @@ The web viewer is read-only, bound to 127.0.0.1 only, and has no authentication.
 
 ## Roadmap: v0.2
 
-- litellm instrumentation, since it sits in front of most providers at once and is the fastest way
-  to cover more of the ecosystem without a bespoke adapter per SDK.
-- A pytest plugin built on replay, for deterministic, token-free agent tests and a `traceburn
-  check` step that runs in CI without spending real money.
+- A pytest plugin built on replay, for deterministic, token-free agent tests that feed straight
+  into `traceburn check` in CI.
 - OpenTelemetry GenAI span ingest plus OTLP export. This is also the path for capturing LangChain
   and LlamaIndex traces, since it rides on their existing OTel instrumentation rather than
   requiring bespoke adapters for each.

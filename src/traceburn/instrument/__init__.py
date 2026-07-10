@@ -1,9 +1,9 @@
 """Auto-instrumentation: detect installed clients and patch them.
 
 ``traceburn.install()`` is the zero-config entry point. It looks for the
-openai and anthropic packages and wraps their call sites so every LLM call
-becomes an ``llm`` span. Idempotent: calling it twice patches nothing new.
-``traceburn.uninstall()`` restores the original methods.
+openai, anthropic, and litellm packages and wraps their call sites so every
+LLM call becomes an ``llm`` span. Idempotent: calling it twice patches
+nothing new. ``traceburn.uninstall()`` restores the original methods.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 
 from . import anthropic as anthropic_patcher
+from . import litellm as litellm_patcher
 from . import openai as openai_patcher
 
 logger = logging.getLogger("traceburn")
@@ -18,6 +19,7 @@ logger = logging.getLogger("traceburn")
 _PATCHERS = {
     "openai": openai_patcher,
     "anthropic": anthropic_patcher,
+    "litellm": litellm_patcher,
 }
 
 

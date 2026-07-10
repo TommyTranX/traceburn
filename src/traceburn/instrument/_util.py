@@ -68,6 +68,149 @@ def estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+def messages_text(messages: Any) -> str:
+    """Flatten a chat-messages list to plain text, for token estimation."""
+    parts = []
+    try:
+        for message in messages or []:
+            content = message.get("content") if isinstance(message, dict) else None
+            if isinstance(content, str):
+                parts.append(content)
+            elif isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and isinstance(block.get("text"), str):
+                        parts.append(block["text"])
+    except Exception:
+        pass
+    return "\n".join(parts)
+
+
+def raw_dump(result: Any) -> Any:
+    try:
+        return result.model_dump(mode="json")
+    except Exception:
+        return None
+
+
+def set_chat_usage(handle: SpanHandle, usage: Any) -> None:
+    if usage is None:
+        return
+    prompt = getattr(usage, "prompt_tokens", 0) or 0
+    completion = getattr(usage, "completion_tokens", 0) or 0
+    details = getattr(usage, "prompt_tokens_details", None)
+    cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
+    handle.set_attributes(
+        {
+            "gen_ai.usage.input_tokens": prompt - cached,
+            "gen_ai.usage.output_tokens": completion,
+            "cached_input_tokens": cached,
+        }
+    )
+
+
+def capture_chat_response(handle: SpanHandle, result: Any) -> None:
+    """Record a Chat-Completions-shaped response onto a span.
+
+    Shared by the openai and litellm patchers: litellm's ``ModelResponse``
+    and streaming chunks are deliberately built to mirror the openai SDK's
+    chat-completion shapes field for field, so one capture path covers both.
+    """
+    choice = result.choices[0] if getattr(result, "choices", None) else None
+    message = getattr(choice, "message", None)
+    tool_calls = []
+    for call in getattr(message, "tool_calls", None) or []:
+        function = getattr(call, "function", None)
+        tool_calls.append(
+            {
+                "id": getattr(call, "id", None),
+                "name": getattr(function, "name", None),
+                "arguments": getattr(function, "arguments", None),
+            }
+        )
+    handle.set_attributes(
+        {
+            "gen_ai.response.model": getattr(result, "model", None),
+            "gen_ai.response.id": getattr(result, "id", None),
+            "finish_reason": getattr(choice, "finish_reason", None),
+            "response": {
+                "text": getattr(message, "content", None),
+                "tool_calls": tool_calls,
+            },
+            "response_raw": raw_dump(result),
+        }
+    )
+    set_chat_usage(handle, getattr(result, "usage", None))
+
+
+class ChatStreamCollector:
+    """Accumulates chat-completion chunks into final span attributes.
+
+    Shared by the openai and litellm patchers; see ``capture_chat_response``.
+    """
+
+    def __init__(self, kwargs: dict[str, Any]):
+        self._request_text = messages_text(kwargs.get("messages"))
+        self.model = None
+        self.response_id = None
+        self.finish_reason = None
+        self.usage = None
+        self.text = []
+        self.tool_calls: dict[int, dict[str, Any]] = {}
+
+    def add(self, chunk: Any) -> None:
+        self.model = getattr(chunk, "model", None) or self.model
+        self.response_id = getattr(chunk, "id", None) or self.response_id
+        if getattr(chunk, "usage", None) is not None:
+            self.usage = chunk.usage
+        for choice in getattr(chunk, "choices", None) or []:
+            # Multi-choice (n > 1) responses record choice 0, matching the
+            # non-streaming capture.
+            if (getattr(choice, "index", 0) or 0) != 0:
+                continue
+            if getattr(choice, "finish_reason", None):
+                self.finish_reason = choice.finish_reason
+            delta = getattr(choice, "delta", None)
+            if delta is None:
+                continue
+            if getattr(delta, "content", None):
+                self.text.append(delta.content)
+            for call in getattr(delta, "tool_calls", None) or []:
+                index = getattr(call, "index", 0) or 0
+                slot = self.tool_calls.setdefault(
+                    index, {"id": None, "name": None, "arguments": ""}
+                )
+                slot["id"] = getattr(call, "id", None) or slot["id"]
+                function = getattr(call, "function", None)
+                if function is not None:
+                    slot["name"] = getattr(function, "name", None) or slot["name"]
+                    slot["arguments"] += getattr(function, "arguments", None) or ""
+
+    def finalize(self, handle: SpanHandle, error: str | None) -> None:
+        text = "".join(self.text)
+        handle.set_attributes(
+            {
+                "gen_ai.response.model": self.model,
+                "gen_ai.response.id": self.response_id,
+                "finish_reason": self.finish_reason,
+                "response": {
+                    "text": text or None,
+                    "tool_calls": list(self.tool_calls.values()),
+                },
+            }
+        )
+        if self.usage is not None:
+            set_chat_usage(handle, self.usage)
+        else:
+            handle.set_attributes(
+                {
+                    "gen_ai.usage.input_tokens": estimate_tokens(self._request_text),
+                    "gen_ai.usage.output_tokens": estimate_tokens(text),
+                    "usage_estimated": True,
+                }
+            )
+        handle.end(error=error)
+
+
 class TracedSyncStream:
     """Wraps a provider stream so the span closes when the stream does.
 
@@ -235,8 +378,12 @@ class TracedAsyncStream:
         return getattr(inner, name)
 
 
-def patch_method(cls: type, name: str, wrapper_factory: Callable) -> bool:
+def patch_method(cls: Any, name: str, wrapper_factory: Callable) -> bool:
     """Replace ``cls.name`` with ``wrapper_factory(original)``, once.
+
+    ``cls`` is usually a class (an SDK client's method), but a module works
+    too (litellm's ``completion``/``acompletion`` are module-level
+    functions, not client methods); both support ``__dict__``/``setattr``.
 
     Returns True when the method was patched by this call, False when it was
     already patched. The original lands on the wrapper as
@@ -253,7 +400,7 @@ def patch_method(cls: type, name: str, wrapper_factory: Callable) -> bool:
     return True
 
 
-def unpatch_method(cls: type, name: str) -> None:
+def unpatch_method(cls: Any, name: str) -> None:
     current = getattr(cls, name, None)
     original = getattr(current, "__traceburn_original__", None)
     if original is not None:

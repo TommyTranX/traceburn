@@ -26,11 +26,15 @@ from typing import Any
 
 from ..recorder import get_recorder
 from ._util import (
+    ChatStreamCollector,
     TracedAsyncStream,
     TracedSyncStream,
+    capture_chat_response,
     clean_params,
     estimate_tokens,
+    messages_text,
     patch_method,
+    raw_dump,
     request_hash,
     unpatch_method,
 )
@@ -83,22 +87,6 @@ def is_available() -> bool:
     return importlib.util.find_spec("openai") is not None
 
 
-def _messages_text(messages: Any) -> str:
-    parts = []
-    try:
-        for message in messages or []:
-            content = message.get("content") if isinstance(message, dict) else None
-            if isinstance(content, str):
-                parts.append(content)
-            elif isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict) and isinstance(block.get("text"), str):
-                        parts.append(block["text"])
-    except Exception:
-        pass
-    return "\n".join(parts)
-
-
 def normalized_request(endpoint: str, kwargs: dict[str, Any]) -> dict[str, Any]:
     """The stored request payload; also the input to request_hash.
 
@@ -126,29 +114,6 @@ def _start_llm_span(endpoint: str, params: tuple[str, ...], kwargs: dict[str, An
     return recorder.start_span(f"chat {model}", kind="llm", attributes=attributes)
 
 
-def _raw_dump(result: Any) -> Any:
-    try:
-        return result.model_dump(mode="json")
-    except Exception:
-        return None
-
-
-def _set_chat_usage(handle, usage: Any) -> None:
-    if usage is None:
-        return
-    prompt = getattr(usage, "prompt_tokens", 0) or 0
-    completion = getattr(usage, "completion_tokens", 0) or 0
-    details = getattr(usage, "prompt_tokens_details", None)
-    cached = (getattr(details, "cached_tokens", 0) or 0) if details else 0
-    handle.set_attributes(
-        {
-            "gen_ai.usage.input_tokens": prompt - cached,
-            "gen_ai.usage.output_tokens": completion,
-            "cached_input_tokens": cached,
-        }
-    )
-
-
 def _set_responses_usage(handle, usage: Any) -> None:
     if usage is None:
         return
@@ -163,34 +128,6 @@ def _set_responses_usage(handle, usage: Any) -> None:
             "cached_input_tokens": cached,
         }
     )
-
-
-def _capture_chat_response(handle, result: Any) -> None:
-    choice = result.choices[0] if getattr(result, "choices", None) else None
-    message = getattr(choice, "message", None)
-    tool_calls = []
-    for call in getattr(message, "tool_calls", None) or []:
-        function = getattr(call, "function", None)
-        tool_calls.append(
-            {
-                "id": getattr(call, "id", None),
-                "name": getattr(function, "name", None),
-                "arguments": getattr(function, "arguments", None),
-            }
-        )
-    handle.set_attributes(
-        {
-            "gen_ai.response.model": getattr(result, "model", None),
-            "gen_ai.response.id": getattr(result, "id", None),
-            "finish_reason": getattr(choice, "finish_reason", None),
-            "response": {
-                "text": getattr(message, "content", None),
-                "tool_calls": tool_calls,
-            },
-            "response_raw": _raw_dump(result),
-        }
-    )
-    _set_chat_usage(handle, getattr(result, "usage", None))
 
 
 def _capture_responses_response(handle, result: Any) -> None:
@@ -213,76 +150,10 @@ def _capture_responses_response(handle, result: Any) -> None:
                 "text": getattr(result, "output_text", None) or None,
                 "tool_calls": tool_calls,
             },
-            "response_raw": _raw_dump(result),
+            "response_raw": raw_dump(result),
         }
     )
     _set_responses_usage(handle, getattr(result, "usage", None))
-
-
-class ChatStreamCollector:
-    """Accumulates chat-completion chunks into final span attributes."""
-
-    def __init__(self, kwargs: dict[str, Any]):
-        self._request_text = _messages_text(kwargs.get("messages"))
-        self.model = None
-        self.response_id = None
-        self.finish_reason = None
-        self.usage = None
-        self.text = []
-        self.tool_calls: dict[int, dict[str, Any]] = {}
-
-    def add(self, chunk: Any) -> None:
-        self.model = getattr(chunk, "model", None) or self.model
-        self.response_id = getattr(chunk, "id", None) or self.response_id
-        if getattr(chunk, "usage", None) is not None:
-            self.usage = chunk.usage
-        for choice in getattr(chunk, "choices", None) or []:
-            # Multi-choice (n > 1) responses record choice 0, matching the
-            # non-streaming capture.
-            if (getattr(choice, "index", 0) or 0) != 0:
-                continue
-            if getattr(choice, "finish_reason", None):
-                self.finish_reason = choice.finish_reason
-            delta = getattr(choice, "delta", None)
-            if delta is None:
-                continue
-            if getattr(delta, "content", None):
-                self.text.append(delta.content)
-            for call in getattr(delta, "tool_calls", None) or []:
-                index = getattr(call, "index", 0) or 0
-                slot = self.tool_calls.setdefault(
-                    index, {"id": None, "name": None, "arguments": ""}
-                )
-                slot["id"] = getattr(call, "id", None) or slot["id"]
-                function = getattr(call, "function", None)
-                if function is not None:
-                    slot["name"] = getattr(function, "name", None) or slot["name"]
-                    slot["arguments"] += getattr(function, "arguments", None) or ""
-
-    def finalize(self, handle, error: str | None) -> None:
-        text = "".join(self.text)
-        handle.set_attributes(
-            {
-                "gen_ai.response.model": self.model,
-                "gen_ai.response.id": self.response_id,
-                "finish_reason": self.finish_reason,
-                "response": {
-                    "text": text or None,
-                    "tool_calls": list(self.tool_calls.values()),
-                },
-            }
-        )
-        if self.usage is not None:
-            _set_chat_usage(handle, self.usage)
-        else:
-            handle.set_attributes(
-                {
-                    "gen_ai.usage.input_tokens": estimate_tokens(self._request_text),
-                    "gen_ai.usage.output_tokens": estimate_tokens(text),
-                    "usage_estimated": True,
-                }
-            )
-        handle.end(error=error)
 
 
 class ResponsesStreamCollector:
@@ -293,7 +164,7 @@ class ResponsesStreamCollector:
         if isinstance(raw_input, str):
             self._request_text = raw_input
         else:
-            self._request_text = _messages_text(raw_input)
+            self._request_text = messages_text(raw_input)
         instructions = kwargs.get("instructions")
         if isinstance(instructions, str):
             self._request_text = f"{instructions}\n{self._request_text}"
@@ -408,7 +279,7 @@ def patch() -> bool:
         chat_completions.Completions,
         "create",
         _make_wrapper(
-            "chat.completions", CHAT_PARAMS, _capture_chat_response,
+            "chat.completions", CHAT_PARAMS, capture_chat_response,
             ChatStreamCollector, is_async=False,
         ),
     )
@@ -416,7 +287,7 @@ def patch() -> bool:
         chat_completions.AsyncCompletions,
         "create",
         _make_wrapper(
-            "chat.completions", CHAT_PARAMS, _capture_chat_response,
+            "chat.completions", CHAT_PARAMS, capture_chat_response,
             ChatStreamCollector, is_async=True,
         ),
     )

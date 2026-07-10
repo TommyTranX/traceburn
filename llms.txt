@@ -1,11 +1,11 @@
 # traceburn
 
 > Finds and cuts wasted LLM spend. A local-first tracer for AI agents built on the
-> openai and anthropic Python SDKs: a waste report that quantifies avoidable spend
-> in dollars, a fix command that renders mechanical patches for two of the five
-> waste patterns, a CI cost-regression gate, a cost and latency flamegraph,
-> deterministic replay, and run diffs. One SQLite file, no account, no server, no
-> telemetry.
+> openai and anthropic Python SDKs and litellm: a waste report that quantifies
+> avoidable spend in dollars, a fix command that renders mechanical patches for two
+> of the five waste patterns, a CI cost-regression gate, a cost and latency
+> flamegraph, deterministic replay, and run diffs. One SQLite file, no account, no
+> server, no telemetry.
 
 Install: `pip install traceburn` (core, zero dependencies) or
 `pip install "traceburn[ui]"` (adds the local web viewer). Requires Python 3.10+.
@@ -33,7 +33,7 @@ runs.
 - [docs/fix-and-check.md](https://github.com/TommyTranX/traceburn/blob/main/docs/fix-and-check.md):
   the `fix` and `check` commands in detail, including the CI usage pattern.
 - [docs/instrumentation.md](https://github.com/TommyTranX/traceburn/blob/main/docs/instrumentation.md):
-  how the openai/anthropic patching works, and how to add a new adapter.
+  how the openai/anthropic/litellm patching works, and how to add a new adapter.
 - [docs/replay.md](https://github.com/TommyTranX/traceburn/blob/main/docs/replay.md):
   deterministic, token-free replay of recorded calls.
 - [docs/concepts.md](https://github.com/TommyTranX/traceburn/blob/main/docs/concepts.md):

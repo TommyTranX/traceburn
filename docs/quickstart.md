@@ -28,10 +28,10 @@ import traceburn
 traceburn.install()
 ```
 
-That is the whole integration for openai and anthropic SDK code: every
-call is recorded with model, messages, usage, cache reads and writes,
-latency, and an estimated cost. Add your own steps where the patchers
-cannot see:
+That is the whole integration for openai and anthropic SDK code, and for
+litellm's `completion()` / `acompletion()`: every call is recorded with
+model, messages, usage, cache reads and writes, latency, and an estimated
+cost. Add your own steps where the patchers cannot see:
 
 ```python
 from traceburn import trace, span, session

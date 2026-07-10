@@ -347,9 +347,9 @@ def test_miss_message_mentions_missing_payload(tmp_path, monkeypatch):
     rec = traceburn.configure(db_path=str(tmp_path / "traces.db"))
     traceburn.install()
     try:
-        from traceburn.instrument import openai as openai_patcher
+        from traceburn.instrument import _util as instrument_util
 
-        monkeypatch.setattr(openai_patcher, "_raw_dump", lambda result: None)
+        monkeypatch.setattr(instrument_util, "raw_dump", lambda result: None)
         client = OpenAI(
             api_key="test",
             http_client=httpx.Client(transport=httpx.MockTransport(echo_handler)),

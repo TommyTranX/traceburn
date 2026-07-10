@@ -10,13 +10,14 @@ interfaces; either is an afternoon of work.
 git clone https://github.com/TommyTranX/traceburn
 cd traceburn
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[ui]" pytest openai anthropic httpx
+pip install -e ".[ui]" pytest openai anthropic litellm httpx
 pytest
 ```
 
 The test suite makes no network calls. Instrumentation tests run the real
-provider SDKs over `httpx.MockTransport`, so they exercise the exact
-objects the patchers see in production without a key.
+provider SDKs over `httpx.MockTransport` (or, for litellm, its own
+`mock_response` kwarg), so they exercise the exact objects the patchers see
+in production without a key.
 
 ## Adding an instrumentation adapter
 

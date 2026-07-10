@@ -2,7 +2,18 @@
 
 An adapter turns a client library's calls into `llm` spans. The openai and
 anthropic adapters in `src/traceburn/instrument/` are the reference
-implementations; this page is the map.
+implementations for a client class with methods to patch; `litellm.py` is
+the reference for a library that exposes plain module-level functions
+instead. This page is the map.
+
+When a client's response objects mirror the shape of one already
+supported (litellm's `ModelResponse` is deliberately built to match the
+openai SDK's chat-completion objects field for field), reuse the capture
+helpers in `_util.py` (`capture_chat_response`, `ChatStreamCollector`,
+`messages_text`, `set_chat_usage`, `raw_dump`) instead of duplicating them.
+`patch_method` / `unpatch_method` work on a module object the same way
+they work on a class, so a module-level call surface doesn't need its own
+patching mechanism.
 
 ## The shape
 
