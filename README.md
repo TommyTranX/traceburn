@@ -241,6 +241,12 @@ for a new SDK or framework, and a
 pattern of avoidable spend. The full guide is at
 [CONTRIBUTING.md](https://github.com/TommyTranX/traceburn/blob/main/CONTRIBUTING.md).
 
+## For AI agents
+
+A machine-readable summary lives at
+[llms.txt](https://github.com/TommyTranX/traceburn/blob/main/llms.txt): what the tool does, how to
+install and invoke it, and links to every doc, without needing to parse this whole page.
+
 ## Citation
 
 A citation file is included at
