@@ -14,6 +14,12 @@ claimed.
 
 Prefix length is estimated from the recorded request text; the span is the
 evidence, the estimate is labeled an estimate.
+
+When the provider is anthropic and the shared prefix is verifiably the
+whole ``system`` string (not something spanning into the messages too),
+the finding carries a renderable fix (see ``analyze/fix.py``): wrap that
+field as a cache_control block. Anything less certain stays unfixed rather
+than guess at code we cannot see.
 """
 
 from __future__ import annotations
@@ -100,6 +106,23 @@ def run(ctx: RuleContext) -> list[Finding]:
                 avoidable_usd = saving
 
             first = window[0]
+
+            fix = None
+            if (prov or "").lower() == "anthropic":
+                system_val = (first.attributes.get("request") or {}).get("system")
+                # Two conditions, both necessary: the shared prefix must
+                # cover the whole system field (so it is genuinely identical
+                # across calls, safe to wrap statically), and the system
+                # field must clear the provider's cache minimum on its own
+                # (so the suggested fix actually qualifies for caching,
+                # rather than wrapping something too short to matter).
+                if (
+                    isinstance(system_val, str)
+                    and prefix_chars >= len(system_val)
+                    and estimate(system_val) >= min_prefix
+                ):
+                    fix = {"kind": "anthropic_cache_control", "span_id": first.span_id}
+
             findings.append(
                 Finding(
                     rule_id=RULE_ID,
@@ -121,6 +144,7 @@ def run(ctx: RuleContext) -> list[Finding]:
                     avoidable_tokens=prefix_tokens * (len(window) - 1),
                     avoidable_usd=avoidable_usd,
                     confidence="medium",
+                    fix=fix,
                 )
             )
     return findings

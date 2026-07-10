@@ -6,6 +6,9 @@ listed model. The dollar figure is what the same tokens would have cost on
 that cheapest model, so it is an upper bound on the saving and the finding
 is explicitly a suggestion: quality on the cheaper model must be verified
 by the person who owns the step. Confidence is low by design.
+
+The finding carries a renderable fix (see ``analyze/fix.py``): the literal
+model-string swap. It is still only a suggestion; applying it is on you.
 """
 
 from __future__ import annotations
@@ -89,6 +92,7 @@ def run(ctx: RuleContext) -> list[Finding]:
                 avoidable_tokens=None,
                 avoidable_usd=avoidable,
                 confidence="low",
+                fix={"kind": "swap_model", "from_model": mdl, "to_model": cheap_model},
             )
         )
     return findings

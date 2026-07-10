@@ -4,6 +4,8 @@
     traceburn ls                   recent sessions and traces
     traceburn show <trace_id>      span tree with timing, tokens, and cost
     traceburn waste <trace_id>     efficiency report with avoidable spend
+    traceburn fix <trace_id>       mechanical patches for fixable findings
+    traceburn check [trace_id]     CI gate: exit nonzero on a cost or waste threshold
     traceburn diff <a> <b>         compare two runs step by step
 
 Trace ids can be abbreviated to any unique prefix. The database path comes
@@ -197,6 +199,93 @@ def cmd_waste(store: Store, args: argparse.Namespace) -> None:
         print()
 
 
+def cmd_fix(store: Store, args: argparse.Namespace) -> None:
+    from .analyze import waste
+    from .analyze.fix import render_fix
+    from .schema import Finding
+
+    trace = _resolve_trace(store, args.trace_id)
+    result = waste.report(store, trace.trace_id)
+    print(f"trace {trace.trace_id[:12]}  '{trace.name}'")
+    if not result["findings"]:
+        print("no waste found, nothing to fix")
+        return
+
+    findings = [Finding.from_dict(f) for f in result["findings"]]
+    rendered = [(f, render_fix(f, store)) for f in findings]
+    fixable = [(f, patch) for f, patch in rendered if patch]
+    unfixable = len(findings) - len(fixable)
+
+    summary = f"{len(fixable)} fix(es) available of {len(findings)} finding(s)"
+    if unfixable:
+        summary += f"; {unfixable} have no automatic fix (run `traceburn waste` for those)"
+    print(summary)
+
+    for finding, patch in fixable:
+        print(f"\n--- {finding.rule_id}: {finding.summary} ---")
+        print(patch)
+
+
+def cmd_check(store: Store, args: argparse.Namespace) -> None:
+    from .analyze import waste
+
+    if args.trace_id:
+        trace = _resolve_trace(store, args.trace_id)
+    else:
+        traces = store.list_traces(limit=1)
+        if not traces:
+            raise SystemExit("no traces recorded yet; nothing to check")
+        trace = traces[0]
+
+    stats = store.trace_stats(trace.trace_id)
+    cost = stats["cost_usd"] or 0.0
+    print(f"trace {trace.trace_id[:12]}  '{trace.name}'  {_format_cost(cost)}")
+
+    violations = []
+
+    if args.max_cost is not None and cost > args.max_cost:
+        violations.append(
+            f"cost {_format_cost(cost)} exceeds --max-cost {_format_cost(args.max_cost)}"
+        )
+
+    if args.max_avoidable_pct is not None:
+        report = waste.report(store, trace.trace_id)
+        pct = (report["avoidable_usd"] / cost * 100) if cost > 0 else 0.0
+        print(
+            f"avoidable: {pct:.0f}% "
+            f"({_format_cost(report['avoidable_usd'])} of {_format_cost(cost)})"
+        )
+        if pct > args.max_avoidable_pct:
+            violations.append(
+                f"{pct:.0f}% avoidable exceeds --max-avoidable-pct {args.max_avoidable_pct:.0f}%"
+            )
+
+    if args.baseline:
+        baseline = _resolve_trace(store, args.baseline)
+        baseline_cost = store.trace_stats(baseline.trace_id)["cost_usd"] or 0.0
+        if baseline_cost > 0:
+            regression_pct = (cost - baseline_cost) / baseline_cost * 100
+            print(
+                f"vs baseline {baseline.trace_id[:12]}: {regression_pct:+.0f}% "
+                f"({_format_cost(baseline_cost)} -> {_format_cost(cost)})"
+            )
+            if (
+                args.max_regression_pct is not None
+                and regression_pct > args.max_regression_pct
+            ):
+                violations.append(
+                    f"{regression_pct:+.0f}% cost regression vs baseline exceeds "
+                    f"--max-regression-pct {args.max_regression_pct:.0f}%"
+                )
+
+    if violations:
+        print("\nFAIL")
+        for v in violations:
+            print(f"  - {v}")
+        raise SystemExit(1)
+    print("\nPASS")
+
+
 def cmd_diff(store: Store, args: argparse.Namespace) -> None:
     from .analyze.diff import diff_traces
 
@@ -308,6 +397,36 @@ def main(argv: list[str] | None = None) -> int:
     waste_parser = sub.add_parser("waste", help="efficiency report for one trace")
     waste_parser.add_argument("trace_id", help="trace id or unique prefix")
     waste_parser.set_defaults(func=cmd_waste)
+
+    fix_parser = sub.add_parser(
+        "fix", help="show mechanical patches for fixable waste findings"
+    )
+    fix_parser.add_argument("trace_id", help="trace id or unique prefix")
+    fix_parser.set_defaults(func=cmd_fix)
+
+    check_parser = sub.add_parser(
+        "check", help="CI gate: exit nonzero if cost or waste crosses a threshold"
+    )
+    check_parser.add_argument(
+        "trace_id", nargs="?", default=None,
+        help="trace id or unique prefix (default: the most recently recorded trace)",
+    )
+    check_parser.add_argument(
+        "--max-cost", type=float, default=None,
+        help="fail if the trace's estimated cost exceeds this many dollars",
+    )
+    check_parser.add_argument(
+        "--max-avoidable-pct", type=float, default=None,
+        help="fail if the waste report's avoidable share exceeds this percent",
+    )
+    check_parser.add_argument(
+        "--baseline", default=None, help="compare cost against this trace id or prefix"
+    )
+    check_parser.add_argument(
+        "--max-regression-pct", type=float, default=None,
+        help="with --baseline, fail if cost rose by more than this percent",
+    )
+    check_parser.set_defaults(func=cmd_check)
 
     diff_parser = sub.add_parser("diff", help="compare two traces")
     diff_parser.add_argument("trace_a", help="baseline trace id or prefix")

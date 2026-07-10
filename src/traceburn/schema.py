@@ -136,7 +136,10 @@ class Finding:
     quantified, defensible estimate of what was avoidable. Estimates are
     derived from observed tokens and the dated pricing table, never invented.
     ``confidence`` is one of "low", "medium", "high" and reflects how likely
-    the flagged waste is real, not how large it is.
+    the flagged waste is real, not how large it is. ``fix`` is rule-specific,
+    machine-readable data for a mechanical fix, populated only when one is
+    defensible without seeing the caller's source code; None means the rule
+    has no automatic fix. See ``analyze/fix.py`` for how each kind renders.
     """
 
     rule_id: str
@@ -149,6 +152,7 @@ class Finding:
     avoidable_usd: float | None = None
     avoidable_seconds: float | None = None
     confidence: str = "medium"
+    fix: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

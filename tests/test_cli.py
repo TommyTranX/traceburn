@@ -76,3 +76,125 @@ def test_duration_formatting_carries_units():
     assert _format_duration(59_960_000_000) == "1m0s"
     assert _format_duration(5_000_000) == "5.0ms"
     assert _format_duration(None) == "-"
+
+
+@pytest.fixture
+def db_with_fixable_finding(tmp_path):
+    """A trace with a model_overkill finding, which carries a renderable fix."""
+    db = str(tmp_path / "traces.db")
+    recorder = Recorder(store=Store(db))
+    with recorder.session("s"):
+        with recorder.span("agent", kind="agent"):
+            for i in range(3):
+                with recorder.span(
+                    "chat gpt-5",
+                    kind="llm",
+                    attributes={
+                        "gen_ai.system": "openai",
+                        "gen_ai.request.model": "gpt-5",
+                        "gen_ai.usage.input_tokens": 100,
+                        "gen_ai.usage.output_tokens": 10,
+                        "cost_usd": (100 * 1.25 + 10 * 10.0) / 1e6,
+                        "request_hash": f"h{i}",
+                        "response": {"text": "ok", "tool_calls": []},
+                    },
+                ):
+                    pass
+    recorder.store.close()
+    return db
+
+
+@pytest.fixture
+def db_with_no_waste(tmp_path):
+    db = str(tmp_path / "traces.db")
+    recorder = Recorder(store=Store(db))
+    with recorder.session("s"):
+        with recorder.span("agent", kind="agent"):
+            with recorder.span(
+                "chat gpt-test", kind="llm",
+                attributes={
+                    "gen_ai.system": "openai", "gen_ai.request.model": "gpt-test",
+                    "gen_ai.usage.input_tokens": 50, "gen_ai.usage.output_tokens": 10,
+                    "cost_usd": 0.001,
+                },
+            ):
+                pass
+    recorder.store.close()
+    return db
+
+
+def test_fix_shows_model_swap_patch(db_with_fixable_finding, capsys):
+    store = Store(db_with_fixable_finding)
+    trace_id = store.list_traces()[0].trace_id
+    store.close()
+
+    assert main(["--db", db_with_fixable_finding, "fix", trace_id[:8]]) == 0
+    out = capsys.readouterr().out
+    assert "fix(es) available" in out
+    assert "model_overkill" in out
+    assert "gpt-5" in out
+
+
+def test_fix_reports_nothing_to_fix_when_clean(db_with_no_waste, capsys):
+    store = Store(db_with_no_waste)
+    trace_id = store.list_traces()[0].trace_id
+    store.close()
+
+    assert main(["--db", db_with_no_waste, "fix", trace_id[:8]]) == 0
+    assert "nothing to fix" in capsys.readouterr().out
+
+
+def test_check_passes_under_threshold(populated_db, capsys):
+    assert main(["--db", populated_db, "check", "--max-cost", "1.0"]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_check_fails_over_cost_threshold(populated_db, capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", populated_db, "check", "--max-cost", "0.001"])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "FAIL" in out
+    assert "exceeds --max-cost" in out
+
+
+def test_check_defaults_to_latest_trace(populated_db, capsys):
+    assert main(["--db", populated_db, "check", "--max-cost", "1.0"]) == 0
+    out = capsys.readouterr().out
+    assert "research-agent" in out
+
+
+def test_check_no_traces_exits_cleanly(tmp_path):
+    db = str(tmp_path / "empty.db")
+    Store(db).close()
+    with pytest.raises(SystemExit, match="no traces recorded"):
+        main(["--db", db, "check"])
+
+
+def test_check_baseline_regression(db_with_fixable_finding, capsys):
+    store = Store(db_with_fixable_finding)
+    recorder = Recorder(store=store)
+    with recorder.session("s2"):
+        with recorder.span("agent-expensive", kind="agent"):
+            with recorder.span(
+                "chat gpt-5", kind="llm",
+                attributes={
+                    "gen_ai.system": "openai", "gen_ai.request.model": "gpt-5",
+                    "gen_ai.usage.input_tokens": 100_000, "gen_ai.usage.output_tokens": 10_000,
+                    "cost_usd": 0.5,
+                },
+            ):
+                pass
+    traces = store.list_traces()
+    baseline_id = traces[-1].trace_id  # the small, first-recorded trace
+    expensive_id = traces[0].trace_id  # the newest, most expensive trace
+    store.close()
+
+    with pytest.raises(SystemExit) as exc:
+        main([
+            "--db", db_with_fixable_finding, "check", expensive_id[:8],
+            "--baseline", baseline_id[:8], "--max-regression-pct", "10",
+        ])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "regression" in out

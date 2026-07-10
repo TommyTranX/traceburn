@@ -477,3 +477,67 @@ def test_cache_rule_fires_with_system_block_list(pricing):
     ]
     findings = cache.run(ctx_for(spans, pricing))
     assert len(findings) == 1
+
+
+# -- fix data (structured, machine-readable patch hints) ---------------------
+
+
+def test_cache_finding_carries_fix_for_anthropic_plain_system(pricing):
+    prefix = "policy manual section " * 900  # ~4950 estimated tokens, clears anthropic's minimum
+    spans = [
+        llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
+                 start_ms=i * 1000, in_tok=5100,
+                 request={"system": prefix, "messages": [{"role": "user", "content": f"q{i}"}]})
+        for i in range(3)
+    ]
+    findings = cache.run(ctx_for(spans, pricing))
+    assert len(findings) == 1
+    assert findings[0].fix == {"kind": "anthropic_cache_control", "span_id": spans[0].span_id}
+
+
+def test_cache_finding_no_fix_for_openai(pricing):
+    spans = [
+        llm_span(req_hash=f"h{i}", start_ms=i * 1000, in_tok=1600,
+                 request=big_prefix_request(f"question {i}"))
+        for i in range(3)
+    ]
+    findings = cache.run(ctx_for(spans, pricing))
+    assert len(findings) == 1
+    assert findings[0].fix is None
+
+
+def test_cache_finding_no_fix_when_system_shorter_than_prefix(pricing):
+    # The shared prefix lives mostly in the messages, not the system field;
+    # system alone is too short to confidently be the whole fix.
+    shared_block = "shared instructions " * 900  # clears anthropic's minimum on its own
+    spans = [
+        llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
+                 start_ms=i * 1000, in_tok=5100,
+                 request={
+                     "system": "short",
+                     "messages": [{"role": "user", "content": shared_block + f" q{i}"}],
+                 })
+        for i in range(3)
+    ]
+    findings = cache.run(ctx_for(spans, pricing))
+    assert len(findings) == 1
+    assert findings[0].fix is None
+
+
+def test_model_overkill_finding_carries_swap_model_fix(pricing):
+    spans = [
+        llm_span(name="format-title", in_tok=200, out_tok=20,
+                 cost=(200 * 2.0 + 20 * 8.0) / 1e6, start_ms=i * 100, req_hash=f"h{i}")
+        for i in range(3)
+    ]
+    findings = model_overkill.run(ctx_for(spans, pricing))
+    assert len(findings) == 1
+    assert findings[0].fix == {
+        "kind": "swap_model", "from_model": "gpt-test", "to_model": "gpt-test-mini",
+    }
+
+
+def test_duplicates_and_loops_never_claim_a_fix(pricing):
+    spans = [llm_span(req_hash="same", cost=0.01, start_ms=i * 100) for i in range(3)]
+    for f in duplicates.run(ctx_for(spans, pricing)):
+        assert f.fix is None

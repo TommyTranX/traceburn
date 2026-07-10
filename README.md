@@ -20,11 +20,13 @@ Measured 2026-07-05.
 
 ![traceburn's waste report on the uncached run: $0.0539 total, about 82 percent flagged avoidable, with the repeated 5,618-token prefix identified as the cause](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/waste-report.png)
 
-That's the whole pitch in one run. traceburn is a local-first tracer and efficiency profiler for
-AI agents, built on top of the openai and anthropic Python SDKs: a cost and latency flamegraph, a
-waste report that quantifies avoidable spend instead of just gesturing at it, deterministic replay
-of recorded calls, and run diffs, all backed by one SQLite file on disk. No account, no server to
-stand up for basic use, no telemetry leaving your machine.
+That's the whole pitch in one run. traceburn finds and cuts wasted LLM spend. Point it at an agent
+built on the openai or anthropic Python SDK and the waste report tells you exactly which calls are
+burning money for no reason, with a dollar figure attached instead of a vague warning, and for two
+of the five waste patterns, `traceburn fix` prints the literal patch. A cost and latency
+flamegraph, deterministic replay of recorded calls, and run diffs come with it, all backed by one
+SQLite file on disk. No account, no server to stand up for basic use, no telemetry leaving your
+machine.
 
 ## Install
 
@@ -69,6 +71,8 @@ traceburn ui             # opens the web viewer at 127.0.0.1:8765
 traceburn ls              # list recorded traces
 traceburn show <id>       # inspect one trace
 traceburn waste <id>      # run the waste report on one trace
+traceburn fix <id>        # print the literal patch, where one is derivable
+traceburn check           # CI cost-regression gate, exits nonzero over budget
 traceburn diff <a> <b>    # compare two traces span by span
 ```
 
@@ -77,6 +81,20 @@ run with realistic token counts, including one deliberate duplicate call, so you
 trace, a real flamegraph, and a real waste finding inside a minute.
 
 ## What it actually does
+
+**Waste report.** Heuristics look for duplicate calls, unused cache opportunities, bloated
+prompts, model overkill, and retry loops. Each finding ships with a confidence level and, where the
+numbers support it, a dollar figure, so you're looking at "$0.037/run avoidable" instead of a
+generic warning. More on this below.
+
+**Fix.** `traceburn fix <id>` goes one step past the report: for the two waste patterns where a
+mechanical patch is derivable from the recorded call alone (a missed Anthropic cache_control block,
+a model swap to something cheaper), it prints the literal change instead of leaving you to work it
+out.
+
+**Check.** `traceburn check` is a threshold gate for CI: fail the build if a traced run costs more
+than a dollar limit, if too much of its spend looks avoidable, or if it regressed against a named
+baseline trace. A linter for what your agent's calls actually cost.
 
 **Trace.** `traceburn.install()` patches both SDKs so every call becomes a span with tokens,
 latency, and cost attached, no code changes required past that one line. Want manual control
@@ -88,10 +106,6 @@ instead, or you're using a framework outside the two supported SDKs? The explici
 **Flamegraph.** Spans render as a flamegraph you can size two ways: by wall-clock time or by
 dollars spent, with self-time kept separate from time spent in children, so a slow parent span
 doesn't hide which child call actually burned the seconds or the money.
-
-**Waste report.** Heuristics look for duplicate calls, unused cache opportunities, bloated
-prompts, model overkill, and retry loops. Each finding ships with a confidence level and, where the
-numbers support it, a dollar figure. More on this below.
 
 **Replay.** `traceburn.analyze.replay.replay()` plays recorded provider responses back through the
 real SDK types, so your agent code runs again exactly as before with zero tokens spent. That's
@@ -141,6 +155,11 @@ rules are tuned for precision over recall and would rather stay quiet than guess
 figure is ever printed without observed tokens behind it and a price in the pricing table to
 multiply against; everything the tool prints is labeled an estimate, because it is one.
 
+Two of the five, `cache` and `model_overkill`, sometimes carry enough information to fix
+mechanically rather than just flag; `traceburn fix` renders those. The other three need a decision
+only visible in your own source code, so they stay a diagnosis rather than a patch. Full writeup at
+[docs/fix-and-check.md](https://github.com/TommyTranX/traceburn/blob/main/docs/fix-and-check.md).
+
 ## Privacy
 
 traceburn makes no network calls of its own and sends no telemetry anywhere. The only traffic on
@@ -171,11 +190,13 @@ The web viewer is read-only, bound to 127.0.0.1 only, and has no authentication.
 
 ## Roadmap: v0.2
 
+- litellm instrumentation, since it sits in front of most providers at once and is the fastest way
+  to cover more of the ecosystem without a bespoke adapter per SDK.
+- A pytest plugin built on replay, for deterministic, token-free agent tests and a `traceburn
+  check` step that runs in CI without spending real money.
 - OpenTelemetry GenAI span ingest plus OTLP export. This is also the path for capturing LangChain
   and LlamaIndex traces, since it rides on their existing OTel instrumentation rather than
   requiring bespoke adapters for each.
-- A pytest plugin built on replay, for deterministic, token-free agent tests.
-- litellm instrumentation.
 - More waste rules.
 
 ## Related work

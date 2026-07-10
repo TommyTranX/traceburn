@@ -20,6 +20,12 @@ avoidable tokens, dollars, or seconds where defensible, and a `confidence`
 field (`high`, `medium`, `low`) saying how likely the flagged waste is real.
 The `Finding` JSON schema is a public interface (see `schema.py`).
 
+Two rules, `cache` and `model_overkill`, sometimes also carry a `fix` field:
+structured data for a mechanical patch, rendered by `traceburn fix
+<trace_id>`. Every other rule needs a decision only visible in your own
+source code, so it stays a suggestion with no patch attached. See
+[fix-and-check.md](fix-and-check.md).
+
 ## duplicates
 
 Fires when the same normalized request was sent more than once and every
@@ -121,3 +127,9 @@ Requirements for a merged rule:
 - an entry in `ALL_RULES` in `waste/__init__.py` and a section on this page
 
 A rule that raises is skipped and logged; it never takes the report down.
+
+Populating `Finding.fix` is optional and should stay rare: only set it when
+the mechanical change is derivable from the recorded request alone, with no
+visibility into the caller's actual code. If you do, add a renderer in
+`analyze/fix.py` and a positive/negative test there too (see
+[fix-and-check.md](fix-and-check.md) for the existing two kinds).
