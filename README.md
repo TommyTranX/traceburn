@@ -2,6 +2,8 @@
 
 Find expensive patterns in your AI agent, inspect the calls, and test a change.
 
+[Explore the browser demo](https://tommytranx.github.io/traceburn/demo.html) · [Website and installation](https://tommytranx.github.io/traceburn/)
+
 ## Try it in one command
 
 ```bash

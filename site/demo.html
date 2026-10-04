@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>TraceBurn | Synthetic demo</title><style>
+:root{color-scheme:light;--ink:#182334;--muted:#55657a;--accent:#146655;--line:#dce5e6}
+*{box-sizing:border-box}body{margin:0;background:#f5f8f8;color:var(--ink);font:16px/1.6 system-ui,sans-serif}
+main{max-width:1080px;margin:auto;padding:48px 24px}.brand,.eyebrow{font-size:13px;letter-spacing:.05em;color:var(--accent);font-weight:700}
+h1{font-size:clamp(32px,5vw,48px);line-height:1.1;margin:12px 0}h2{margin-top:36px}h3{margin:0;font-size:21px}p{margin:12px 0}
+.muted,footer{color:var(--muted)}aside{background:#e6f2ed;border-left:4px solid var(--accent);padding:16px;margin:24px 0}
+.metrics{display:flex;gap:16px;flex-wrap:wrap;margin:24px 0}.metric{flex:1;min-width:160px;border:1px solid var(--line);background:white;padding:20px;border-radius:12px}
+.metric strong{display:block;font-size:30px}article{background:white;border:1px solid var(--line);border-radius:12px;padding:24px;margin:16px 0}
+a{color:var(--accent)}summary{cursor:pointer;color:var(--muted)}.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:white}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}tr:target{background:#e6f2ed}
+footer{font-size:14px;margin-top:32px;border-top:1px solid var(--line);padding-top:20px}
+</style></head><body><main><nav aria-label="Main"><a href="./">TraceBurn: installation and source</a></nav><div class="brand">TRACEBURN / SYNTHETIC DEMO</div>
+<h1>Where did this run spend?</h1><p class="muted">Inspect the calls. Test a change. Check that the task still succeeds.</p><aside>This is a synthetic example with invented tokens, durations, and costs. It demonstrates a repeated request; it is not a measured benchmark or a savings claim.</aside>
+<div class="metrics"><div class="metric">Estimated model cost<strong>$0.0360</strong></div>
+<div class="metric">Model calls<strong>3</strong></div><div class="metric">Findings to investigate<strong>1</strong></div></div>
+<p class="muted">Costs are estimates from recorded metadata. Cost changes alone do not establish equivalent task quality.</p>
+<h2>What to investigate</h2><article><h3>Repeated model requests</h3><p class="eyebrow">2 linked calls | high confidence</p><p>Inspect the linked calls locally to check whether the requests and answers repeat.</p><p><a href="#call-2">Call 2</a>, <a href="#call-3">Call 3</a></p><p><strong>Try next:</strong> Try reusing a result or moving the call out of the loop when its inputs are stable.</p><details><summary>When this may be expected</summary><p>Repeated sampling can be intentional. Check task outcomes before removing a call.</p></details><p>Potential savings: $0.0120. Estimate only; findings may overlap and should not be added together.</p></article>
+<h2>Calls and recorded usage</h2><p class="muted">Call numbers are local to this report. Input excludes cache reads and writes, which have separate columns. Missing usage is shown as unknown.</p>
+<div class="scroll"><table><thead><tr><th>Call</th><th>Parent</th><th>Kind</th><th>Status</th><th>Time (ms)</th><th>Input</th><th>Cache read</th><th>Cache write</th><th>Output</th><th>Est. cost</th></tr></thead><tbody><tr id="call-1"><td>Call 1</td><td>root</td><td>agent</td><td>ok</td><td>4,000.0</td><td>unknown</td><td>unknown</td><td>unknown</td><td>unknown</td><td>n/a</td></tr><tr id="call-2"><td>Call 2</td><td>Call 1</td><td>llm</td><td>ok</td><td>1,000.0</td><td>2,400</td><td>0</td><td>0</td><td>160</td><td>$0.0120</td></tr><tr id="call-3"><td>Call 3</td><td>Call 1</td><td>llm</td><td>ok</td><td>1,000.0</td><td>2,400</td><td>0</td><td>0</td><td>160</td><td>$0.0120</td></tr><tr id="call-4"><td>Call 4</td><td>Call 1</td><td>llm</td><td>ok</td><td>1,000.0</td><td>2,400</td><td>0</td><td>0</td><td>160</td><td>$0.0120</td></tr></tbody></table></div>
+<footer><strong>Export scope:</strong> numeric usage, timing, cost, topology, fixed status labels, and findings categories only. Prompts, responses, tool arguments, names, models, raw IDs, timestamps, errors, and paths are omitted. Numeric metadata can still be sensitive; review before sharing. The source database retains its recorded payloads. This standalone file contains no scripts, external assets, or telemetry.</footer>
+</main></body></html>
