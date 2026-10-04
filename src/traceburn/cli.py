@@ -16,6 +16,7 @@ in that order. Stdlib only; no server, no network.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -226,6 +227,33 @@ def cmd_fix(store: Store, args: argparse.Namespace) -> None:
         print(patch)
 
 
+def _checked_trace_cost(store: Store, trace: Trace) -> float:
+    """Refuse a cost gate when any recorded model call has unknown cost."""
+    unknown = []
+    for span in store.get_spans(trace.trace_id, hydrate=False):
+        if span.kind != "llm":
+            continue
+        cost = span.attributes.get("cost_usd")
+        if (
+            not isinstance(cost, (int, float))
+            or isinstance(cost, bool)
+            or not math.isfinite(cost)
+            or cost < 0
+        ):
+            unknown.append(span.span_id)
+    if unknown:
+        print("FAIL: insufficient cost data")
+        print(
+            f"  trace {trace.trace_id[:12]} has {len(unknown)} LLM span(s) with "
+            "missing or invalid cost. This can indicate an unknown model price "
+            "or missing usage. Record usage and configure model pricing before "
+            "rerunning the check."
+        )
+        print("  spans: " + ", ".join(s[:12] for s in unknown[:5]))
+        raise SystemExit(1)
+    return store.trace_stats(trace.trace_id)["cost_usd"] or 0.0
+
+
 def cmd_check(store: Store, args: argparse.Namespace) -> None:
     from .analyze import waste
 
@@ -237,8 +265,10 @@ def cmd_check(store: Store, args: argparse.Namespace) -> None:
             raise SystemExit("no traces recorded yet; nothing to check")
         trace = traces[0]
 
-    stats = store.trace_stats(trace.trace_id)
-    cost = stats["cost_usd"] or 0.0
+    if args.max_regression_pct is not None and not args.baseline:
+        raise SystemExit("--max-regression-pct requires --baseline")
+
+    cost = _checked_trace_cost(store, trace)
     print(f"trace {trace.trace_id[:12]}  '{trace.name}'  {_format_cost(cost)}")
 
     violations = []
@@ -262,8 +292,15 @@ def cmd_check(store: Store, args: argparse.Namespace) -> None:
 
     if args.baseline:
         baseline = _resolve_trace(store, args.baseline)
-        baseline_cost = store.trace_stats(baseline.trace_id)["cost_usd"] or 0.0
-        if baseline_cost > 0:
+        baseline_cost = _checked_trace_cost(store, baseline)
+        if baseline_cost == 0 and cost > 0:
+            violations.append(
+                "cannot compute percentage regression from a zero-cost baseline "
+                "to a positive current cost; use --max-cost for an absolute budget"
+            )
+        elif baseline_cost == 0:
+            print(f"vs baseline {baseline.trace_id[:12]}: both costs are zero")
+        else:
             regression_pct = (cost - baseline_cost) / baseline_cost * 100
             print(
                 f"vs baseline {baseline.trace_id[:12]}: {regression_pct:+.0f}% "

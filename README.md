@@ -9,14 +9,15 @@ going out uncached on all 10 calls, and estimated that about 82 percent of that 
 avoidable. So I added exactly the one cache_control block it suggested and reran the same five
 tickets: $0.0167.
 
-That's a 69 percent measured saving. The tool's estimate landed within 18 percent of what actually
-happened, close enough to trust as a first signal, not close enough to treat as gospel. That's
-roughly how I want a cost estimator to behave.
+That's a 69 percent saving in that run, compared with an estimated 82 percent:
+about 13 percentage points higher than the observed saving. This small synthetic example
+illustrates the workflow; it does not establish typical savings or estimator accuracy.
+The figures and screenshot below describe the original run, not a benchmark of each release.
 
-Prices change and models get repriced, so do not take my word for it: the reproduction is a few
-cents and a couple of minutes, at
+Prices and model behavior change. You can rerun the paid example at
 [examples/cache_before_after.py](https://github.com/TommyTranX/traceburn/blob/main/examples/cache_before_after.py).
-Measured 2026-07-05.
+Measured 2026-07-05. The example now stops after at most three API requests per ticket
+and disables SDK retries. This limits requests, not the dollar charge.
 
 ![traceburn's waste report on the uncached run: $0.0539 total, about 82 percent flagged avoidable, with the repeated 5,618-token prefix identified as the cause](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/waste-report.png)
 
@@ -76,9 +77,19 @@ traceburn check           # CI cost-regression gate, exits nonzero over budget
 traceburn diff <a> <b>    # compare two traces span by span
 ```
 
-No API keys and nothing to configure: `python examples/offline_demo.py` records a simulated agent
-run with realistic token counts, including one deliberate duplicate call, so you can see a real
-trace, a real flamegraph, and a real waste finding inside a minute.
+To try it without API keys, clone the repository for the example files:
+
+```bash
+git clone https://github.com/TommyTranX/traceburn.git
+cd traceburn
+python -m pip install -e ".[ui]"
+python examples/offline_demo.py
+traceburn ui
+```
+
+The offline example records a simulated agent run with synthetic token counts,
+including one deliberate duplicate call. Its costs illustrate the report; they are
+not measurements from a model provider.
 
 ## What it actually does
 
@@ -96,9 +107,9 @@ out.
 than a dollar limit, if too much of its spend looks avoidable, or if it regressed against a named
 baseline trace. A linter for what your agent's calls actually cost.
 
-**Trace.** `traceburn.install()` patches both SDKs so every call becomes a span with tokens,
-latency, and cost attached, no code changes required past that one line. Want manual control
-instead, or you're using a framework outside the two supported SDKs? The explicit API, `@trace`,
+**Trace.** `traceburn.install()` patches the supported OpenAI, Anthropic and LiteLLM
+entry points so calls become spans with tokens, latency and estimated cost attached.
+Want manual control instead, or you're using a framework outside those adapters? The explicit API, `@trace`,
 `span()`, and `session()`, works by hand with anything.
 
 ![traceburn's expandable trace tree, showing an agent's nested spans with per-call tokens and cost](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/trace-tree.png)
@@ -164,25 +175,32 @@ only visible in your own source code, so they stay a diagnosis rather than a pat
 
 ## Privacy
 
-traceburn makes no network calls of its own and sends no telemetry anywhere. The only traffic on
-the wire is your own calls to your own model provider, exactly as they'd happen without traceburn
-installed. A test,
-[tests/test_no_network.py](https://github.com/TommyTranX/traceburn/blob/main/tests/test_no_network.py),
-blocks all socket access at the interpreter level and then runs the recorder, the store, every
-analyzer, and the CLI against that blockade, to prove the point rather than just assert it. Auth
-headers are never recorded in a trace, so an API key cannot end up sitting in a stored span.
+TraceBurn sends no telemetry and makes no outbound network requests of its own.
+The optional viewer serves data on localhost. The
+[offline tests](https://github.com/TommyTranX/traceburn/blob/main/tests/test_no_network.py)
+exercise recording and analysis with socket access blocked, including token estimation.
+Token estimates use a local character-count heuristic without downloading tokenizer data.
+
+The SDK adapters omit authentication headers, but capture prompts, responses and tool
+arguments. Those payloads, custom span attributes and error messages can contain secrets
+or personal data. There is currently no built-in redaction or payload opt-out. Review what
+your application records, protect the database and its SQLite journal files, and do not
+share a trace database without inspecting its contents.
 
 ## Limitations
 
-Instrumentation currently covers only the `openai` and `anthropic` Python SDKs. Within those,
-`parse()` convenience methods and `with_raw_response` calls pass through untraced rather than being
-recorded incorrectly, and multi-choice requests (`n > 1`) only record the first choice.
+Instrumentation covers the `openai` and `anthropic` Python SDKs plus LiteLLM's
+`completion()` and `acompletion()`. SDK `parse()` convenience methods and
+`with_raw_response` calls pass through untraced. Multi-choice requests (`n > 1`)
+record text and tool calls from the first choice.
 
 Cost figures come from a dated public pricing table
 ([pricing.json](https://github.com/TommyTranX/traceburn/blob/main/src/traceburn/pricing.json)) and
 don't model long-context pricing tiers or regional surcharges. Token counts prefer whatever the
 provider itself reports as usage; anything estimated is flagged as estimated rather than presented
-as measured.
+as measured. Fallback token counts use roughly four characters per token; accuracy varies
+with language and content. Cache savings estimates are capped by recorded input usage
+when available, and no cache dollar estimate is shown when input usage is missing.
 
 The waste rules are heuristics tuned for precision over recall, which means they'll miss real
 waste sooner than they'll invent fake waste, and every finding states its own confidence so you

@@ -121,7 +121,7 @@ def test_near_duplicates_silent_on_different_prompts(pricing):
 
 
 def big_prefix_request(tail):
-    prefix = "system instructions " * 900  # ~1800 estimated tokens (real tiktoken, not char/4)
+    prefix = "system instructions " * 900  # 4500 estimated tokens (characters / 4)
     return {
         "messages": [
             {"role": "system", "content": prefix},
@@ -465,7 +465,7 @@ def test_message_texts_handle_system_block_list():
 
 
 def test_cache_rule_fires_with_system_block_list(pricing):
-    prefix = "policy manual section " * 2200  # ~6600 estimated tokens (real tiktoken)
+    prefix = "policy manual section " * 2200  # 12100 estimated tokens (characters / 4)
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,
@@ -483,7 +483,7 @@ def test_cache_rule_fires_with_system_block_list(pricing):
 
 
 def test_cache_finding_carries_fix_for_anthropic_plain_system(pricing):
-    prefix = "policy manual section " * 2200  # ~6600 estimated tokens, clears anthropic's minimum
+    prefix = "policy manual section " * 2200  # long enough to clear anthropic's minimum
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,
@@ -509,7 +509,7 @@ def test_cache_finding_no_fix_for_openai(pricing):
 def test_cache_finding_no_fix_when_system_shorter_than_prefix(pricing):
     # The shared prefix lives mostly in the messages, not the system field;
     # system alone is too short to confidently be the whole fix.
-    shared_block = "shared instructions " * 3300  # ~6600 estimated tokens, clears anthropic's minimum on its own
+    shared_block = "shared instructions " * 3300  # long enough to clear anthropic's minimum on its own
     spans = [
         llm_span(model="claude-test", provider="anthropic", req_hash=f"h{i}",
                  start_ms=i * 1000, in_tok=5100,
@@ -541,3 +541,35 @@ def test_duplicates_and_loops_never_claim_a_fix(pricing):
     spans = [llm_span(req_hash="same", cost=0.01, start_ms=i * 100) for i in range(3)]
     for f in duplicates.run(ctx_for(spans, pricing)):
         assert f.fix is None
+
+
+def test_cache_estimate_cannot_exceed_observed_prompt_tokens(pricing):
+    spans = [
+        llm_span(req_hash=f"h{i}", start_ms=i * 1000, in_tok=1600,
+                 request=big_prefix_request(f"question {i}"))
+        for i in range(3)
+    ]
+    finding = cache.run(ctx_for(spans, pricing))[0]
+    assert finding.avoidable_tokens <= 1600 * 2
+    assert finding.avoidable_usd <= 1600 * 2 * (2.0 - 0.5) / 1e6
+
+
+def test_cache_does_not_price_missing_usage(pricing):
+    spans = [
+        llm_span(req_hash=f"h{i}", start_ms=i * 1000,
+                 request=big_prefix_request(f"question {i}"))
+        for i in range(3)
+    ]
+    for span in spans:
+        del span.attributes["gen_ai.usage.input_tokens"]
+    finding = cache.run(ctx_for(spans, pricing))[0]
+    assert finding.avoidable_usd is None
+
+
+def test_cache_observed_short_prompt_does_not_clear_cache_minimum(pricing):
+    spans = [
+        llm_span(req_hash=f"h{i}", start_ms=i * 1000, in_tok=100,
+                 request=big_prefix_request(f"question {i}"))
+        for i in range(3)
+    ]
+    assert cache.run(ctx_for(spans, pricing)) == []

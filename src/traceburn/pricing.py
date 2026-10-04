@@ -162,7 +162,13 @@ class PricingTable:
         return total / 1_000_000
 
     def cost_for_attributes(self, attributes: dict[str, Any]) -> float | None:
-        """Compute cost from llm span attributes (see schema.py conventions)."""
+        """Compute cost from llm attributes, or None when usage is absent."""
+        usage_keys = (
+            "gen_ai.usage.input_tokens", "gen_ai.usage.output_tokens",
+            "cached_input_tokens", "cache_write_tokens",
+        )
+        if not any(attributes.get(key) is not None for key in usage_keys):
+            return None
         model = attributes.get("gen_ai.response.model") or attributes.get(
             "gen_ai.request.model"
         )

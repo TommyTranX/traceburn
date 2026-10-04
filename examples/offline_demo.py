@@ -14,8 +14,10 @@ The token counts below are made up but realistic. Real instrumentation
 
 import random
 import time
+import hashlib
 
 from traceburn import session, span, trace
+from traceburn.store import default_db_path
 
 
 def fake_llm_call(name, model, input_tokens, output_tokens, cached_input_tokens=0, prompt=None):
@@ -29,7 +31,7 @@ def fake_llm_call(name, model, input_tokens, output_tokens, cached_input_tokens=
         "cached_input_tokens": cached_input_tokens,
         "request": {"messages": [{"role": "user", "content": prompt}]},
         "response": {"text": f"({name} response)"},
-        "request_hash": f"demo-{hash(prompt) & 0xFFFFFFFF:08x}",
+        "request_hash": "demo-" + hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
         "finish_reason": "stop",
         "stream": False,
     }
@@ -60,5 +62,5 @@ def run_agent(question):
 if __name__ == "__main__":
     with session("offline-demo"):
         run_agent("What changed in agent observability this year?")
-    print("recorded one trace into ./.traceburn/traces.db")
+    print(f"recorded one trace into {default_db_path()}")
     print("next: traceburn ls")

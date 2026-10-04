@@ -12,23 +12,20 @@ with one tool round per ticket. Needs ANTHROPIC_API_KEY. Two variants:
 Measured on 2026-07-05 with claude-haiku-4-5: the uncached run cost
 $0.0539, the cached run $0.0167, a 69 percent saving from adding one
 cache_control block, exactly what the waste report suggested. Prices
-change; rerun it yourself. Each run costs a few cents.
+change; rerun it yourself. This is a paid API demo, with at most three
+requests per ticket by default and SDK retries disabled. This limits calls,
+not dollars; check your provider pricing before running it.
 
 Everything here is generic and synthetic; the ONLY network calls are to
 the Anthropic API via the instrumented SDK.
 """
 
+import argparse
 import json
-import sys
 
 import traceburn
 from traceburn import session, span
 
-traceburn.install()
-
-from anthropic import Anthropic
-
-client = Anthropic()
 MODEL = "claude-haiku-4-5"
 
 # -- the static prefix: policy manual + few-shot examples (~4,700 tokens) ----
@@ -113,7 +110,10 @@ def system_blocks(cached: bool):
     return [block]
 
 
-def triage(ticket_id: str, email: str, text: str, cached: bool) -> dict:
+def triage(ticket_id: str, email: str, text: str, cached: bool, *,
+           client, max_tool_rounds: int = 2) -> dict:
+    if max_tool_rounds < 0:
+        raise ValueError("max_tool_rounds must be nonnegative")
     with span(f"triage-{ticket_id}", kind="agent"):
         messages = [{"role": "user", "content": f"Ticket from {email}: {text}"}]
         response = client.messages.create(
@@ -123,10 +123,21 @@ def triage(ticket_id: str, email: str, text: str, cached: bool) -> dict:
             tools=TOOLS,
             messages=messages,
         )
+        tool_rounds = 0
         while response.stop_reason == "tool_use":
+            if tool_rounds >= max_tool_rounds:
+                raise RuntimeError(
+                    f"ticket {ticket_id} exceeded {max_tool_rounds} tool rounds; "
+                    "stopping before another API request"
+                )
+            tool_rounds += 1
             tool_uses = [b for b in response.content if b.type == "tool_use"]
+            if not tool_uses:
+                raise RuntimeError("provider requested tool use without a tool call")
             results = []
             for use in tool_uses:
+                if use.name != "lookup_account":
+                    raise RuntimeError(f"unsupported tool: {use.name}")
                 results.append(
                     {
                         "type": "tool_result",
@@ -150,12 +161,24 @@ def triage(ticket_id: str, email: str, text: str, cached: bool) -> dict:
             return {"raw": text_out}
 
 
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("variant", choices=("uncached", "cached"), nargs="?", default="uncached")
+    args = parser.parse_args(argv)
+    # Parse before importing or constructing the client, so --help and invalid
+    # arguments work without an SDK installation or API key.
+    from anthropic import Anthropic
+
+    traceburn.install()
+    with Anthropic(max_retries=0) as client:
+        cached = args.variant == "cached"
+        with session(f"triage-{args.variant}"):
+            with span(f"ticket-triage-{args.variant}", kind="agent") as root:
+                for ticket_id, email, text in TICKETS:
+                    decision = triage(ticket_id, email, text, cached, client=client)
+                    print(f"{ticket_id}: {json.dumps(decision)}")
+    print(f"\nvariant={args.variant} trace={root.span.trace_id}")
+
+
 if __name__ == "__main__":
-    variant = sys.argv[1] if len(sys.argv) > 1 else "uncached"
-    cached = variant == "cached"
-    with session(f"triage-{variant}") as sess:
-        with span(f"ticket-triage-{variant}", kind="agent") as root:
-            for ticket_id, email, text in TICKETS:
-                decision = triage(ticket_id, email, text, cached)
-                print(f"{ticket_id}: {json.dumps(decision)}")
-    print(f"\nvariant={variant} trace={root.span.trace_id}")
+    main()

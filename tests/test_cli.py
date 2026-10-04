@@ -198,3 +198,92 @@ def test_check_baseline_regression(db_with_fixable_finding, capsys):
     assert exc.value.code == 1
     out = capsys.readouterr().out
     assert "regression" in out
+
+
+def record_check_trace(db, model="unpriced-model", cost=None, usage=True):
+    store = Store(db)
+    recorder = Recorder(store=store)
+    attrs = {"gen_ai.system": "openai", "gen_ai.request.model": model}
+    if usage:
+        attrs["gen_ai.usage.input_tokens"] = 10
+    if cost is not None:
+        attrs["cost_usd"] = cost
+    with recorder.span("agent", kind="agent") as root:
+        with recorder.span("tool", kind="tool"):
+            pass
+        with recorder.span("model", kind="llm", attributes=attrs):
+            pass
+    store.close()
+    return root.span.trace_id
+
+
+@pytest.mark.parametrize("flags", [
+    ["--max-cost", "1"], ["--max-avoidable-pct", "25"], [],
+])
+def test_check_fails_when_a_model_has_unknown_price(tmp_path, capsys, flags):
+    db = str(tmp_path / "check.db")
+    trace_id = record_check_trace(db)
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", db, "check", trace_id] + flags)
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "insufficient cost data" in out
+    assert "unknown model price" in out
+    assert "PASS" not in out
+
+
+def test_check_rejects_known_model_with_missing_usage(tmp_path, capsys):
+    db = str(tmp_path / "check.db")
+    trace_id = record_check_trace(db, model="gpt-4o", usage=False)
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", db, "check", trace_id, "--max-cost", "1"])
+    assert exc.value.code == 1
+    assert "missing usage" in capsys.readouterr().out
+
+
+def test_check_rejects_unknown_baseline_cost(tmp_path, capsys):
+    db = str(tmp_path / "check.db")
+    baseline = record_check_trace(db)
+    current = record_check_trace(db, cost=0.01)
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", db, "check", current, "--baseline", baseline,
+              "--max-regression-pct", "10"])
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert baseline[:12] in out
+    assert "insufficient cost data" in out
+
+
+def test_check_fails_positive_cost_against_zero_baseline(tmp_path, capsys):
+    db = str(tmp_path / "check.db")
+    baseline = record_check_trace(db, cost=0)
+    current = record_check_trace(db, cost=0.01)
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", db, "check", current, "--baseline", baseline,
+              "--max-regression-pct", "10"])
+    assert exc.value.code == 1
+    assert "zero-cost baseline" in capsys.readouterr().out
+
+
+def test_check_accepts_explicit_zero_cost_and_unpriced_tools(tmp_path, capsys):
+    db = str(tmp_path / "check.db")
+    baseline = record_check_trace(db, cost=0)
+    current = record_check_trace(db, cost=0)
+    assert main(["--db", db, "check", current, "--baseline", baseline,
+                 "--max-regression-pct", "10", "--max-cost", "0"]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_check_requires_baseline_for_relative_threshold(populated_db):
+    with pytest.raises(SystemExit, match="requires --baseline"):
+        main(["--db", populated_db, "check", "--max-regression-pct", "10"])
+
+
+@pytest.mark.parametrize("invalid_cost", [float("nan"), float("inf"), -0.1, "unknown"])
+def test_check_rejects_invalid_cost_values(tmp_path, capsys, invalid_cost):
+    db = str(tmp_path / "check.db")
+    trace_id = record_check_trace(db, cost=invalid_cost)
+    with pytest.raises(SystemExit) as exc:
+        main(["--db", db, "check", trace_id, "--max-cost", "1"])
+    assert exc.value.code == 1
+    assert "insufficient cost data" in capsys.readouterr().out

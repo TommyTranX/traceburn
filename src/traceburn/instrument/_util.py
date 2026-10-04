@@ -39,32 +39,17 @@ def request_hash(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-_ENCODER = None
-_ENCODER_FAILED = False
-
-
 def estimate_tokens(text: str) -> int:
-    """Rough token count: tiktoken when importable, else a length heuristic.
+    """Estimate tokens locally using roughly four characters per token.
 
-    Only used when a provider omits usage (streaming without a usage
-    payload). Spans carrying these numbers are marked usage_estimated.
+    This deliberately uses no optional tokenizer: loading tokenizer data can
+    download files and makes results depend on the caller's environment.
+    The heuristic is rough, particularly for code and non-English text.
+    Provider-reported usage takes precedence; fallback counts are marked
+    ``usage_estimated`` by the instrumentation.
     """
     if not text:
         return 0
-    global _ENCODER, _ENCODER_FAILED
-    if _ENCODER is None and not _ENCODER_FAILED:
-        try:
-            import tiktoken
-
-            _ENCODER = tiktoken.get_encoding("o200k_base")
-        except Exception:
-            _ENCODER_FAILED = True
-    if _ENCODER is not None:
-        try:
-            return len(_ENCODER.encode(text))
-        except Exception:
-            pass
-    # Documented heuristic: about four characters per token for English text.
     return max(1, len(text) // 4)
 
 

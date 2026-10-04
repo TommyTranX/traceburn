@@ -62,3 +62,11 @@ Example CI step:
 ```
 
 `check` never modifies anything; it only reads the store and reports.
+
+A cost check also exits nonzero when an LLM span has no valid recorded cost.
+Unknown model prices or missing usage are insufficient data, not zero spend.
+Non-LLM spans do not need a cost. Explicitly recorded zero costs remain valid.
+A positive cost compared with a zero-cost baseline cannot produce a percentage;
+that check fails with an explanation. Use an absolute `--max-cost` budget for
+that case. Two confirmed zero-cost traces pass the relative comparison.
+`--max-regression-pct` requires `--baseline`.

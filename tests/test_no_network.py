@@ -68,3 +68,21 @@ def test_entire_local_surface_makes_no_network_calls(no_network, tmp_path, capsy
                  ["diff", trace_ids[0][:10], trace_ids[1][:10]]):
         assert main(["--db", db] + argv) == 0
     capsys.readouterr()
+
+
+def test_token_estimation_never_loads_optional_tokenizer(monkeypatch, no_network):
+    import sys
+    from types import SimpleNamespace
+
+    from traceburn.instrument._util import estimate_tokens
+
+    attempts = []
+
+    def load_encoding(name):
+        attempts.append(name)
+        raise AssertionError("loading an encoding may download tokenizer data")
+
+    monkeypatch.setitem(sys.modules, "tiktoken", SimpleNamespace(get_encoding=load_encoding))
+    assert estimate_tokens("hello world") > 0
+    assert estimate_tokens("") == 0
+    assert attempts == []

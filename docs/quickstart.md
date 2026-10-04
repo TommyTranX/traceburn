@@ -12,12 +12,17 @@ pip install "traceburn[ui]"  # adds the local web viewer
 
 ## See it work without an API key
 
-```
+The example files live in the repository, so clone it first:
+
+```bash
+git clone https://github.com/TommyTranX/traceburn.git
+cd traceburn
+python -m pip install -e ".[ui]"
 python examples/offline_demo.py
 traceburn ui
 ```
 
-The demo records a simulated research agent with realistic token counts
+The demo records a simulated research agent with synthetic token counts
 (including a deliberate duplicate call), so the viewer has a trace tree, a
 cost flamegraph, and a waste finding to show immediately.
 

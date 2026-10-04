@@ -88,11 +88,21 @@ def run(ctx: RuleContext) -> list[Finding]:
             if prefix_chars == 0:
                 continue
             prefix_tokens = estimate(texts[0][:prefix_chars])
+            # A text heuristic can overestimate the shared prefix. It cannot
+            # exceed the smallest recorded prompt, and missing usage must not
+            # become an invented dollar estimate.
+            observed_inputs = [
+                s.attributes.get("gen_ai.usage.input_tokens") for s in window
+            ]
+            known_inputs = [n for n in observed_inputs if isinstance(n, int) and n >= 0]
+            if known_inputs:
+                prefix_tokens = min(prefix_tokens, min(known_inputs))
+            has_usage = len(known_inputs) == len(window)
             if prefix_tokens < min_prefix:
                 continue
 
             avoidable_usd = None
-            if price is not None and price.cached_input_per_mtok is not None:
+            if has_usage and price is not None and price.cached_input_per_mtok is not None:
                 repeats = len(window) - 1
                 saving = repeats * prefix_tokens * (
                     price.input_per_mtok - price.cached_input_per_mtok

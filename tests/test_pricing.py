@@ -132,3 +132,13 @@ def test_dashed_date_suffix_matches():
     price = table().lookup("openai", "gpt-test-2024-08-06")
     assert price.input_per_mtok == 2.0
     assert table().lookup("openai", "gpt-test-2025-04") is not None
+
+
+def test_absent_usage_is_unknown_cost_not_zero():
+    assert table().cost_for_attributes({
+        "gen_ai.system": "openai", "gen_ai.request.model": "gpt-test",
+    }) is None
+    assert table().cost_for_attributes({
+        "gen_ai.system": "openai", "gen_ai.request.model": "gpt-test",
+        "gen_ai.usage.input_tokens": 0, "gen_ai.usage.output_tokens": 0,
+    }) == 0
