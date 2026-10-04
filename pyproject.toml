@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "traceburn"
-version = "0.1.0"
-description = "Finds and cuts wasted LLM spend: a local-first waste report for AI agents, plus cost and latency flamegraphs, deterministic replay, and run diffs, all over one SQLite file."
+version = "0.2.0"
+description = "Inspect AI agent costs with local traces, actionable findings, standalone reports, replay, and run diffs."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

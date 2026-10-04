@@ -1,5 +1,24 @@
 # traceburn
 
+Find expensive patterns in your AI agent, inspect the calls, and test a change.
+
+## Try it in one command
+
+```bash
+uvx --from git+https://github.com/TommyTranX/traceburn.git traceburn demo
+```
+
+Opens a standalone HTML report. No account, API key, or model call. The bundled
+example is explicitly synthetic. Expand a finding and follow its call links.
+Use `--no-browser` on a headless machine; `--force` replaces a previous demo.
+The GitHub command installs the current source. PyPI may still have an older version.
+
+Already installed from current source? Run `traceburn demo`.
+
+Export a real run for a teammate with `traceburn report -o report.html`. It uses
+the latest trace by default and omits payloads, names, models, raw IDs, and paths.
+Review the remaining numeric metadata before sharing. [Export details](docs/shareable-reports.md).
+
 ## The finding that made me build this
 
 I wrote a small support ticket triage agent: five tickets, one tool call each, a roughly 4,700
@@ -21,13 +40,11 @@ and disables SDK retries. This limits requests, not the dollar charge.
 
 ![traceburn's waste report on the uncached run: $0.0539 total, about 82 percent flagged avoidable, with the repeated 5,618-token prefix identified as the cause](https://raw.githubusercontent.com/TommyTranX/traceburn/main/assets/waste-report.png)
 
-That's the whole pitch in one run. traceburn finds and cuts wasted LLM spend. Point it at an agent
-built on the openai or anthropic Python SDK and the waste report tells you exactly which calls are
-burning money for no reason, with a dollar figure attached instead of a vague warning, and for two
-of the five waste patterns, `traceburn fix` prints the literal patch. A cost and latency
-flamegraph, deterministic replay of recorded calls, and run diffs come with it, all backed by one
-SQLite file on disk. No account, no server to stand up for basic use, no telemetry leaving your
-machine.
+TraceBurn identifies patterns worth investigating: repeated requests, prompt-cache
+opportunities, growing context, retry loops, and candidates for smaller-model tests.
+Its findings are heuristics. Inspect the evidence and evaluate task outcomes before
+changing a workflow. Cost and latency flamegraphs, replay, and run diffs are backed
+by a local SQLite file. No telemetry leaves your machine.
 
 ## Install
 
@@ -56,8 +73,9 @@ traceburn.install()
 # your existing openai / anthropic code, unchanged
 ```
 
-Every sync call, async call, streaming response, tool call, and prompt cache hit on either SDK now
-gets recorded as a span. Traces live in one SQLite file, `./.traceburn/traces.db` by default; set
+Supported synchronous, asynchronous, and streaming model calls are recorded as spans,
+including reported token and cache usage. Wrap your own tool functions with `traceburn.span`
+to record their execution. Traces live in one SQLite file, `./.traceburn/traces.db` by default; set
 the `TRACEBURN_DB` environment variable if you want it somewhere else. If you'd rather not touch
 the source at all, wrap the run instead:
 
@@ -77,19 +95,18 @@ traceburn check           # CI cost-regression gate, exits nonzero over budget
 traceburn diff <a> <b>    # compare two traces span by span
 ```
 
-To try it without API keys, clone the repository for the example files:
+With the current source installed, try a synthetic run or export a real one:
 
 ```bash
-git clone https://github.com/TommyTranX/traceburn.git
-cd traceburn
-python -m pip install -e ".[ui]"
-python examples/offline_demo.py
-traceburn ui
+traceburn demo                         # synthetic report, opens your browser
+traceburn show                         # latest trace, no ID to copy
+traceburn waste                        # findings for latest trace
+traceburn report -o report.html        # standalone export, payloads omitted
+traceburn report <id> -o earlier.html  # choose another trace
 ```
 
-The offline example records a simulated agent run with synthetic token counts,
-including one deliberate duplicate call. Its costs illustrate the report; they are
-not measurements from a model provider.
+The demo does not modify your trace database. All of its usage, timing and cost
+values are invented to demonstrate a repeated request.
 
 ## What it actually does
 

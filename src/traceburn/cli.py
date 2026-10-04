@@ -56,6 +56,11 @@ def _trace_duration(trace: Trace) -> int | None:
 
 
 def _resolve_trace(store: Store, prefix: str) -> Trace:
+    if prefix == "latest":
+        traces = store.list_traces(limit=1)
+        if not traces:
+            raise SystemExit("no traces recorded yet")
+        return traces[0]
     exact = store.get_trace(prefix)
     if exact is not None:
         return exact
@@ -409,6 +414,45 @@ def cmd_ui(store: Store, args: argparse.Namespace) -> None:
     serve(db_path=store.path, port=args.port, open_browser=not args.no_browser)
 
 
+def cmd_report(store: Store, args: argparse.Namespace) -> None:
+    from .report import write_report
+
+    trace = _resolve_trace(store, args.trace_id)
+    try:
+        path = write_report(store, trace.trace_id, args.output, force=args.force)
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"cannot write report: {error}")
+    print(f"Report: {path}")
+    print("Payloads and names are omitted. Review numeric metadata before sharing.")
+    if args.open:
+        import webbrowser
+        webbrowser.open(path.as_uri())
+
+
+def cmd_demo(args: argparse.Namespace) -> None:
+    import tempfile
+    import webbrowser
+
+    from .demo import record_demo
+    from .report import write_report
+
+    # A separate temporary database keeps synthetic data out of user traces.
+    with tempfile.TemporaryDirectory(prefix="traceburn-demo-") as temp:
+        store = Store(Path(temp) / "demo.db")
+        try:
+            trace_id = record_demo(store)
+            path = write_report(store, trace_id, args.output, synthetic=True, force=args.force)
+        except (OSError, ValueError) as error:
+            raise SystemExit(f"cannot write demo: {error}")
+        finally:
+            store.close()
+    print("Synthetic demo: invented usage and costs, no API calls.")
+    print(f"Report: {path}")
+    print("Inspect the repeated request, expand its caveat, and follow its call links.")
+    if not args.no_browser:
+        webbrowser.open(path.as_uri())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="traceburn",
@@ -417,6 +461,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", help="path to the trace database", default=None)
     parser.add_argument("--version", action="version", version=f"traceburn {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    demo_parser = sub.add_parser("demo", help="open a synthetic standalone demo; no API keys")
+    demo_parser.add_argument("-o", "--output", default=".traceburn/demo/report.html")
+    demo_parser.add_argument("--no-browser", action="store_true")
+    demo_parser.add_argument("--force", action="store_true", help="replace an existing report")
+
+    report_parser = sub.add_parser("report", help="export a standalone HTML report with payloads omitted")
+    report_parser.add_argument("trace_id", nargs="?", default="latest", help="trace id, prefix, or latest (default)")
+    report_parser.add_argument("-o", "--output", default="traceburn-report.html")
+    report_parser.add_argument("--open", action="store_true", help="open the file in your browser")
+    report_parser.add_argument("--force", action="store_true", help="replace an existing report")
+    report_parser.set_defaults(func=cmd_report)
 
     ui_parser = sub.add_parser("ui", help="open the local web viewer")
     ui_parser.add_argument("-p", "--port", type=int, default=8765)
@@ -428,17 +484,17 @@ def main(argv: list[str] | None = None) -> int:
     ls_parser.set_defaults(func=cmd_ls)
 
     show_parser = sub.add_parser("show", help="print one trace as a span tree")
-    show_parser.add_argument("trace_id", help="trace id or unique prefix")
+    show_parser.add_argument("trace_id", nargs="?", default="latest", help="trace id, prefix, or latest (default)")
     show_parser.set_defaults(func=cmd_show)
 
     waste_parser = sub.add_parser("waste", help="efficiency report for one trace")
-    waste_parser.add_argument("trace_id", help="trace id or unique prefix")
+    waste_parser.add_argument("trace_id", nargs="?", default="latest", help="trace id, prefix, or latest (default)")
     waste_parser.set_defaults(func=cmd_waste)
 
     fix_parser = sub.add_parser(
         "fix", help="show mechanical patches for fixable waste findings"
     )
-    fix_parser.add_argument("trace_id", help="trace id or unique prefix")
+    fix_parser.add_argument("trace_id", nargs="?", default="latest", help="trace id, prefix, or latest (default)")
     fix_parser.set_defaults(func=cmd_fix)
 
     check_parser = sub.add_parser(
@@ -474,6 +530,9 @@ def main(argv: list[str] | None = None) -> int:
     diff_parser.set_defaults(func=cmd_diff)
 
     args = parser.parse_args(argv)
+    if args.command == "demo":
+        cmd_demo(args)
+        return 0
     db_path = args.db or default_db_path()
     if not Path(db_path).exists():
         raise SystemExit(

@@ -36,7 +36,7 @@ from .recorder import (
 from .schema import SPAN_KINDS, Finding, Session, Span, Trace
 from .store import Store
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "SPAN_KINDS",

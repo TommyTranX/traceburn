@@ -185,6 +185,21 @@ def test_streaming_request_is_a_miss(recorded):
             )
 
 
+def _anthropic_http_client(transport):
+    # Keep replay assertions identical across SDK releases with httpx/httpx2.
+    from anthropic import _base_client
+    sdk_http = getattr(_base_client, "httpx2", None) or _base_client.httpx
+
+    class Adapter(sdk_http.BaseTransport):
+        def handle_request(self, request):
+            response = transport.handle_request(request)
+            return sdk_http.Response(
+                response.status_code, headers=dict(response.headers), content=response.read()
+            )
+
+    return sdk_http.Client(transport=Adapter())
+
+
 def test_replay_anthropic(tmp_path):
     from anthropic import Anthropic
 
@@ -193,7 +208,7 @@ def test_replay_anthropic(tmp_path):
     try:
         client = Anthropic(
             api_key="test",
-            http_client=httpx.Client(transport=httpx.MockTransport(echo_handler)),
+            http_client=_anthropic_http_client(httpx.MockTransport(echo_handler)),
         )
         with traceburn.span("agent", kind="agent") as root:
             client.messages.create(
@@ -204,7 +219,7 @@ def test_replay_anthropic(tmp_path):
     finally:
         traceburn.uninstall()
 
-    poisoned = Anthropic(api_key="test", http_client=httpx.Client(transport=PoisonedTransport()))
+    poisoned = Anthropic(api_key="test", http_client=_anthropic_http_client(PoisonedTransport()))
     with replay(trace_id=root.span.trace_id, store=rec.store):
         result = poisoned.messages.create(
             model="claude-test-4",
@@ -261,7 +276,7 @@ def test_anthropic_stream_helper_honors_on_miss(tmp_path):
     try:
         client = Anthropic(
             api_key="test",
-            http_client=httpx.Client(transport=httpx.MockTransport(echo_handler)),
+            http_client=_anthropic_http_client(httpx.MockTransport(echo_handler)),
         )
         with traceburn.span("agent", kind="agent") as root:
             client.messages.create(
@@ -272,7 +287,7 @@ def test_anthropic_stream_helper_honors_on_miss(tmp_path):
         traceburn.uninstall()
 
     poison = PoisonedTransport()
-    poisoned = Anthropic(api_key="test", http_client=httpx.Client(transport=poison))
+    poisoned = Anthropic(api_key="test", http_client=_anthropic_http_client(poison))
     with replay(trace_id=root.span.trace_id, store=rec.store):
         with pytest.raises(ReplayMiss, match="streaming"):
             with poisoned.messages.stream(

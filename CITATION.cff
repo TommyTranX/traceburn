@@ -8,8 +8,8 @@ authors:
     email: "tommy.tranxhec@gmail.com"
 repository-code: "https://github.com/TommyTranX/traceburn"
 license: MIT
-version: 0.1.0
-date-released: "2026-07-05"
+version: 0.2.0
+date-released: "2026-10-04"
 keywords:
   - AI agents
   - LLM observability

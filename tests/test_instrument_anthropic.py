@@ -3,10 +3,14 @@
 import asyncio
 import json
 
-import httpx
 import pytest
 
+# Anthropic 1.x moved to httpx2; use the SDK's transport type for mocks.
+from anthropic import _base_client as _anthropic_base
+
 import traceburn
+
+httpx = getattr(_anthropic_base, "httpx2", None) or _anthropic_base.httpx
 
 MESSAGE = {
     "id": "msg_01",
