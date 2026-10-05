@@ -1,6 +1,6 @@
 # Standalone reports
 
-With the current source installed, run:
+With version 0.2.0 or newer installed from PyPI, run:
 
 ```bash
 traceburn demo

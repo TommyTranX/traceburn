@@ -7,15 +7,15 @@ Find expensive patterns in your AI agent, inspect the calls, and test a change.
 ## Try it in one command
 
 ```bash
-uvx --from git+https://github.com/TommyTranX/traceburn.git traceburn demo
+uvx --from traceburn==0.2.0 traceburn demo
 ```
 
 Opens a standalone HTML report. No account, API key, or model call. The bundled
 example is explicitly synthetic. Expand a finding and follow its call links.
 Use `--no-browser` on a headless machine; `--force` replaces a previous demo.
-The GitHub command installs the current source. PyPI may still have an older version.
+The command installs version 0.2.0 from PyPI into an isolated environment using uv.
 
-Already installed from current source? Run `traceburn demo`.
+Already installed version 0.2.0 or newer? Run `traceburn demo`.
 
 Export a real run for a teammate with `traceburn report -o report.html`. It uses
 the latest trace by default and omits payloads, names, models, raw IDs, and paths.
@@ -97,7 +97,7 @@ traceburn check           # CI cost-regression gate, exits nonzero over budget
 traceburn diff <a> <b>    # compare two traces span by span
 ```
 
-With the current source installed, try a synthetic run or export a real one:
+With version 0.2.0 or newer installed, try a synthetic run or export a real one:
 
 ```bash
 traceburn demo                         # synthetic report, opens your browser
