@@ -50,6 +50,8 @@ class ModelPrice:
     output_per_mtok: float
     cached_input_per_mtok: float | None = None
     cache_write_per_mtok: float | None = None
+    as_of: str = ""
+    source: str = ""
 
 
 class PricingTable:
@@ -84,6 +86,8 @@ class PricingTable:
                 output_per_mtok=float(entry["output_per_mtok"]),
                 cached_input_per_mtok=_opt_float(entry.get("cached_input_per_mtok")),
                 cache_write_per_mtok=_opt_float(entry.get("cache_write_per_mtok")),
+                as_of=entry.get("as_of", data.get("as_of", "")),
+                source=entry.get("source", ""),
             )
         return cls(prices, data.get("as_of", ""), data.get("note", ""))
 

@@ -1,6 +1,6 @@
 {
   "as_of": "2026-07-04",
-  "note": "Prices in USD per million tokens, standard tier, short context, taken from public provider pricing pages on the as_of date. Prices change and some models have long-context or regional surcharges not modeled here; all costs computed from this table are estimates. Anthropic cache_write_per_mtok is the 5-minute cache write rate; 1-hour cache writes cost more. claude-sonnet-5 reflects introductory pricing listed through 2026-08-31. Google context caching also bills hourly cache storage, which is not modeled. Override with TRACEBURN_PRICING or PricingTable.override.",
+  "note": "Prices in USD per million tokens, standard tier, short context, The top-level as_of is the original snapshot date; per-model as_of and source fields identify entries checked more recently. Prices change and some models have long-context or regional surcharges not modeled here; all costs computed from this table are estimates. Anthropic cache_write_per_mtok is the 5-minute cache write rate; 1-hour cache writes cost more. Google context caching also bills hourly cache storage, which is not modeled. Override with TRACEBURN_PRICING or PricingTable.override.",
   "sources": [
     "https://developers.openai.com/api/docs/pricing",
     "https://platform.claude.com/docs/en/about-claude/pricing",
@@ -10,7 +10,9 @@
     "openai/gpt-5.5": {
       "input_per_mtok": 5,
       "output_per_mtok": 30,
-      "cached_input_per_mtok": 0.5
+      "cached_input_per_mtok": 0.5,
+      "as_of": "2026-10-11",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.5"
     },
     "openai/gpt-5.5-pro": {
       "input_per_mtok": 30,
@@ -131,7 +133,9 @@
     "openai/gpt-4.1": {
       "input_per_mtok": 2,
       "output_per_mtok": 8,
-      "cached_input_per_mtok": 0.5
+      "cached_input_per_mtok": 0.5,
+      "as_of": "2026-10-11",
+      "source": "https://developers.openai.com/api/docs/models/gpt-4.1"
     },
     "openai/gpt-4.1-mini": {
       "input_per_mtok": 0.4,
@@ -194,67 +198,89 @@
       "input_per_mtok": 10,
       "output_per_mtok": 50,
       "cached_input_per_mtok": 1,
-      "cache_write_per_mtok": 12.5
+      "cache_write_per_mtok": 12.5,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-mythos-5": {
       "input_per_mtok": 10,
       "output_per_mtok": 50,
       "cached_input_per_mtok": 1,
-      "cache_write_per_mtok": 12.5
+      "cache_write_per_mtok": 12.5,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-opus-4-8": {
       "input_per_mtok": 5,
       "output_per_mtok": 25,
       "cached_input_per_mtok": 0.5,
-      "cache_write_per_mtok": 6.25
+      "cache_write_per_mtok": 6.25,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-opus-4-7": {
       "input_per_mtok": 5,
       "output_per_mtok": 25,
       "cached_input_per_mtok": 0.5,
-      "cache_write_per_mtok": 6.25
+      "cache_write_per_mtok": 6.25,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-opus-4-6": {
       "input_per_mtok": 5,
       "output_per_mtok": 25,
       "cached_input_per_mtok": 0.5,
-      "cache_write_per_mtok": 6.25
+      "cache_write_per_mtok": 6.25,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-opus-4-5": {
       "input_per_mtok": 5,
       "output_per_mtok": 25,
       "cached_input_per_mtok": 0.5,
-      "cache_write_per_mtok": 6.25
+      "cache_write_per_mtok": 6.25,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-opus-4-1": {
       "input_per_mtok": 15,
       "output_per_mtok": 75,
       "cached_input_per_mtok": 1.5,
-      "cache_write_per_mtok": 18.75
+      "cache_write_per_mtok": 18.75,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-sonnet-5": {
       "input_per_mtok": 2,
       "output_per_mtok": 10,
       "cached_input_per_mtok": 0.2,
-      "cache_write_per_mtok": 2.5
+      "cache_write_per_mtok": 2.5,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-sonnet-4-6": {
       "input_per_mtok": 3,
       "output_per_mtok": 15,
       "cached_input_per_mtok": 0.3,
-      "cache_write_per_mtok": 3.75
+      "cache_write_per_mtok": 3.75,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-sonnet-4-5": {
       "input_per_mtok": 3,
       "output_per_mtok": 15,
       "cached_input_per_mtok": 0.3,
-      "cache_write_per_mtok": 3.75
+      "cache_write_per_mtok": 3.75,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "anthropic/claude-haiku-4-5": {
       "input_per_mtok": 1,
       "output_per_mtok": 5,
       "cached_input_per_mtok": 0.1,
-      "cache_write_per_mtok": 1.25
+      "cache_write_per_mtok": 1.25,
+      "as_of": "2026-10-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
     },
     "google/gemini-3.5-flash": {
       "input_per_mtok": 1.5,

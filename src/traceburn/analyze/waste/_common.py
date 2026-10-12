@@ -8,11 +8,11 @@ token or time quantity alone rather than inventing a number.
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass, field
 from typing import Any
 
 from ...instrument._util import estimate_tokens
+from ...costs import valid_cost
 from ...pricing import PricingTable
 from ...schema import Span
 
@@ -42,12 +42,9 @@ def model(span: Span) -> str | None:
 
 
 def cost(span: Span) -> float:
+    """Known cost contribution only; report() separately tracks unknown calls."""
     value = span.attributes.get("cost_usd")
-    try:
-        parsed = float(value) if value is not None else 0.0
-    except (TypeError, ValueError):
-        return 0.0
-    return parsed if math.isfinite(parsed) else 0.0
+    return float(value) if valid_cost(value) else 0.0
 
 
 def prompt_tokens(span: Span) -> int:

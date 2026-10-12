@@ -1,0 +1,19 @@
+{
+  "prepared_on": "2026-10-11",
+  "paper": "Where the Tokens Go: A Measured Anatomy of LLM Agent Trajectory Costs",
+  "author": "Tommy Tran",
+  "accepted_papers_url": "https://realm-workshop.github.io/accepted_papers/",
+  "original_source": "camera-ready-reviewer-revision/results/runs.jsonl",
+  "original_source_sha256": "9d1ea306ead6a8f4c145e37f4a830a2bd820435f1620c0412babd88fc48e2dba",
+  "original_harness_sha256": "fd30ef4be839e457b6db757222feb2c0166dfa116b61fca2645a25b067ecfce9",
+  "published_observations_sha256": "c70eae025935ca202be2cd62fbb550fa2731f45c292b21a856b477f97731ab69",
+  "selection": "All repeat=0 rows with condition baseline or truncate; no selection by success. 144 paired tasks, 288 attempts.",
+  "transform": "Retain listed per-run totals, runtime grades, submitted/expected answers, and per-step token/model fields; omit other step metadata. No rerun or repricing.",
+  "billing_completeness": "Unknown: original client used max_retries=5 and logs do not expose SDK-internal attempts or invoices.",
+  "grade_reproducibility": "Runtime harness grades retained. Saved logs omit final filesystem state, so the write checks cannot be independently rerun from this export.",
+  "prices_usd_per_million": {
+    "input": 1,
+    "output": 5
+  },
+  "scope": "Single model, synthetic tasks, three task families, 12-step cap; truncate condition caps tool responses at 600 characters."
+}

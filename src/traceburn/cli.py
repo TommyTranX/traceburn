@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .costs import model_costs, valid_cost
 from .schema import Span, Trace
 from .store import Store, default_db_path
 
@@ -42,8 +43,8 @@ def _format_duration(ns: int | None) -> str:
 
 
 def _format_cost(cost: float | None) -> str:
-    if not cost:
-        return "-"
+    if not valid_cost(cost):
+        return "unknown"
     if cost >= 1:
         return f"${cost:.2f}"
     return f"${cost:.4f}"
@@ -97,7 +98,7 @@ def cmd_ls(store: Store, args: argparse.Namespace) -> None:
             f"{stats['span_count']:>5} {stats['llm_count'] or 0:>4} "
             f"{stats['error_count'] or 0:>6} "
             f"{_format_duration(_trace_duration(trace)):>8} "
-            f"{_format_cost(stats['cost_usd']):>10}"
+            f"{_format_cost(model_costs(store.get_spans(trace.trace_id, hydrate=False))['total_cost_usd']):>10}"
         )
 
 
@@ -137,7 +138,7 @@ def cmd_show(store: Store, args: argparse.Namespace) -> None:
         f"{stats['span_count']} spans, {stats['llm_count'] or 0} llm calls, "
         f"{stats['error_count'] or 0} errors, "
         f"{_format_duration(_trace_duration(trace))}, "
-        f"{_format_cost(stats['cost_usd'])} estimated"
+        f"{_format_cost(model_costs(spans)['total_cost_usd'])} estimated"
     )
     print()
     children: dict[str | None, list[Span]] = {}
@@ -462,6 +463,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"traceburn {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    outcomes_parser = sub.add_parser("outcomes", help="report model/API cost per successful task from JSONL or CSV")
+    outcomes_parser.add_argument("attempts", help="one JSONL or CSV row per attempt, including failures")
+    outcomes_parser.add_argument("--manifest", required=True, help="JSON cohort, quality check, and cost provenance")
+    outcomes_parser.add_argument("--format", choices=("markdown", "json", "csv"), default="markdown")
+
     demo_parser = sub.add_parser("demo", help="open a synthetic standalone demo; no API keys")
     demo_parser.add_argument("-o", "--output", default=".traceburn/demo/report.html")
     demo_parser.add_argument("--no-browser", action="store_true")
@@ -532,6 +538,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "demo":
         cmd_demo(args)
+        return 0
+    if args.command == "outcomes":
+        import json
+        from .outcomes import load_attempts, render_summary, summarize
+        try:
+            report = summarize(load_attempts(args.attempts), json.loads(Path(args.manifest).read_text()))
+            print(render_summary(report, args.format), end="")
+        except (OSError, ValueError, OverflowError) as error:
+            parser.error(f"cannot report outcomes: {error}")
         return 0
     db_path = args.db or default_db_path()
     if not Path(db_path).exists():

@@ -11,6 +11,28 @@ from traceburn.schema import Span, Trace, new_span_id, new_trace_id
 MS = 1_000_000
 
 
+@pytest.mark.parametrize("value", [None, -1, float("nan"), float("inf"), True])
+def test_incomplete_cost_is_not_reported_as_zero(store, pricing, value):
+    store.insert_trace(Trace(trace_id="t", name="unknown cost", start_ns=0))
+    store.insert_span(llm_span(cost=value))
+    result = waste.report(store, "t", pricing)
+    assert result["total_cost_usd"] is None
+    assert result["known_cost_usd"] == 0
+    assert result["unknown_cost_calls"] == 1
+    assert "Total cost unknown" in result["headline"]
+    assert "Run cost $0.0000" not in result["headline"]
+
+
+def test_mixed_costs_are_labeled_as_subtotal(store, pricing):
+    store.insert_trace(Trace(trace_id="t", name="partial", start_ns=0))
+    store.insert_span(llm_span(cost=.01, start_ms=0))
+    store.insert_span(llm_span(cost=None, start_ms=100))
+    result = waste.report(store, "t", pricing)
+    assert result["known_cost_usd"] == .01
+    assert result["total_cost_usd"] is None
+    assert "known subtotal $0.0100" in result["headline"]
+
+
 def llm_span(
     name="chat gpt-test",
     model="gpt-test",

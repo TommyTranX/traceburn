@@ -24,6 +24,10 @@ runs.
 
 ## Docs
 
+- [Task-cost measurement](https://github.com/TommyTranX/traceburn/blob/main/docs/task-cost-measurement.md):
+  development `outcomes` command, portable JSONL/CSV, independent success checks,
+  failed attempts, retries, incomplete billing, and offline examples. Not in PyPI 0.2.0.
+
 - [README](https://github.com/TommyTranX/traceburn/blob/main/README.md): full
   pitch, install, quickstart, command reference, privacy and limitations.
 - [docs/quickstart.md](https://github.com/TommyTranX/traceburn/blob/main/docs/quickstart.md):

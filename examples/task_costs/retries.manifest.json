@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "conditions": [
+    "baseline",
+    "candidate"
+  ],
+  "task_ids": [
+    "task-1",
+    "task-2",
+    "task-3"
+  ],
+  "quality_check": "Synthetic fixture only: pass/fail labels are invented to demonstrate accounting.",
+  "pricing_ref": "Invented USD amounts; no model usage or provider billing.",
+  "cost_scope": "model_api",
+  "evidence": "synthetic",
+  "cost_basis": "estimated"
+}

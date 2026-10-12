@@ -13,9 +13,10 @@ import logging
 from typing import Any
 
 from ...pricing import PricingTable
+from ...costs import model_costs
 from ...store import Store
 from . import cache, context_bloat, duplicates, loops, model_overkill
-from ._common import RuleContext, cost
+from ._common import RuleContext
 
 logger = logging.getLogger("traceburn")
 
@@ -44,7 +45,9 @@ def report(store: Store, trace_id: str, pricing: PricingTable | None = None) -> 
         key=lambda f: (_SEVERITY_ORDER.get(f.severity, 9), -(f.avoidable_usd or 0.0))
     )
 
-    total_cost = sum(cost(s) for s in ctx.llm_spans)
+    costs = model_costs(ctx.llm_spans)
+    total_cost = costs["total_cost_usd"]
+    known_cost = costs["known_cost_usd"]
     # Totals count each span once: when findings from different rules claim
     # overlapping spans, only the highest-ranked claim contributes, and the
     # sum never exceeds the run's cost. Per-finding figures are unchanged.
@@ -60,12 +63,11 @@ def report(store: Store, trace_id: str, pricing: PricingTable | None = None) -> 
             avoidable_by_rule.get(finding.rule_id, 0.0) + finding.avoidable_usd
         )
     total_avoidable = sum(avoidable_by_rule.values())
-    if total_cost > 0:
-        total_avoidable = min(total_avoidable, total_cost)
+    total_avoidable = min(total_avoidable, known_cost)
 
     if findings:
         top = findings[0]
-        if total_cost > 0 and total_avoidable > 0:
+        if total_cost is not None and total_cost > 0 and total_avoidable > 0:
             share = min(100.0, 100.0 * total_avoidable / total_cost)
             headline = (
                 f"This run cost ${total_cost:.4f}; about ${total_avoidable:.4f} "
@@ -74,13 +76,19 @@ def report(store: Store, trace_id: str, pricing: PricingTable | None = None) -> 
         else:
             headline = f"Top issue: {top.summary}."
     else:
-        headline = (
-            f"No waste found by the current rules. Run cost ${total_cost:.4f}."
-        )
+        headline = "No waste found by the current rules."
+        if total_cost is not None:
+            headline += f" Run cost ${total_cost:.4f}."
+
+    if costs["unknown_cost_calls"]:
+        headline += (f" Total cost unknown: {costs['unknown_cost_calls']} model call(s) "
+                     f"have missing or invalid cost; known subtotal ${known_cost:.4f}.")
 
     return {
         "trace_id": trace_id,
         "total_cost_usd": total_cost,
+        "known_cost_usd": known_cost,
+        "unknown_cost_calls": costs["unknown_cost_calls"],
         "avoidable_usd": total_avoidable,
         "avoidable_by_rule": avoidable_by_rule,
         "headline": headline,

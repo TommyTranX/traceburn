@@ -288,6 +288,12 @@ class Recorder:
                 cost = None
             if cost is not None:
                 attrs["cost_usd"] = cost
+                price = self.pricing.lookup(attrs.get("gen_ai.system"),
+                                           attrs.get("gen_ai.response.model") or attrs.get("gen_ai.request.model"))
+                if price is not None:
+                    attrs["cost_basis"] = "estimated"
+                    attrs["pricing_as_of"] = price.as_of or self.pricing.as_of
+                    attrs["pricing_source"] = price.source
         self._safe_write(lambda store: store.insert_span(span))
         if span.end_ns is not None:
             self._safe_write(

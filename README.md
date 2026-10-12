@@ -21,6 +21,27 @@ Export a real run for a teammate with `traceburn report -o report.html`. It uses
 the latest trace by default and omits payloads, names, models, raw IDs, and paths.
 Review the remaining numeric metadata before sharing. [Export details](docs/shareable-reports.md).
 
+## Measure cost per successful task
+
+The development source adds `traceburn outcomes`: join independently checked
+task outcomes to model/API spend, including failed attempts and retries. Import
+JSONL or CSV from TraceBurn or another tracer and export Markdown, JSON, or CSV.
+Missing tasks, ungraded outcomes, and incomplete billing leave cost per success
+undefined. Known zero costs remain distinct from unknown costs.
+
+Start with the [measurement guide](docs/task-cost-measurement.md) and
+[offline examples](examples/task_costs/README.md): a synthetic retry fixture and
+a reproducible reanalysis of 288 recorded model runs on synthetic tasks, with
+explicit limits on billing and grade reproducibility. Neither makes API calls.
+
+From a checkout, with Python 3.10 or later:
+
+```bash
+PYTHONPATH=src python3 -m traceburn.cli outcomes examples/task_costs/retries.csv --manifest examples/task_costs/retries.manifest.json
+```
+
+This command is new in `0.3.0.dev0` on GitHub; it is not in the PyPI 0.2.0 release.
+
 ## The finding that made me build this
 
 I wrote a small support ticket triage agent: five tickets, one tool call each, a roughly 4,700
@@ -34,6 +55,8 @@ That's a 69 percent saving in that run, compared with an estimated 82 percent:
 about 13 percentage points higher than the observed saving. This small synthetic example
 illustrates the workflow; it does not establish typical savings or estimator accuracy.
 The figures and screenshot below describe the original run, not a benchmark of each release.
+Those five tickets were not independently graded for quality equivalence, so the
+cost change alone does not establish a better task outcome.
 
 Prices and model behavior change. You can rerun the paid example at
 [examples/cache_before_after.py](https://github.com/TommyTranX/traceburn/blob/main/examples/cache_before_after.py).
@@ -227,7 +250,7 @@ can judge it accordingly. Streaming calls aren't replayable yet; only non-stream
 
 The web viewer is read-only, bound to 127.0.0.1 only, and has no authentication.
 
-## Roadmap: v0.2
+## Roadmap
 
 - A pytest plugin built on replay, for deterministic, token-free agent tests that feed straight
   into `traceburn check` in CI.

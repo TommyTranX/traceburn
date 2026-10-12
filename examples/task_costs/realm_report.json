@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "evidence": "measured",
+  "cost_scope": "model_api",
+  "cost_basis": "estimated",
+  "quality_check": "Original harness check_success: normalized answer or numeric tolerance <0.01, plus required file content where applicable. Runtime grades imported; final filesystem states are not in saved logs.",
+  "pricing_ref": "Frozen recorded-usage estimate: claude-haiku-4-5-20251001, USD 1/M input and 5/M output. No recorded cache tokens. Not an invoice.",
+  "conditions": [
+    {
+      "condition": "baseline",
+      "expected_tasks": 144,
+      "observed_tasks": 144,
+      "successful_tasks": 142,
+      "failed_tasks": 2,
+      "ungraded_tasks": 0,
+      "missing_tasks": 0,
+      "attempts": 144,
+      "restarted_attempts": 0,
+      "success_rate": 0.9861111111111112,
+      "known_cost_usd": 1.708166,
+      "total_cost_usd": null,
+      "billing_complete": false,
+      "failed_attempt_known_cost_usd": 0.030838,
+      "failed_attempt_cost_usd": null,
+      "model_calls": 598,
+      "retry_calls": null,
+      "summed_attempt_latency_s": null,
+      "cost_per_success_usd": null,
+      "undefined_reasons": [
+        "incomplete_billing"
+      ]
+    },
+    {
+      "condition": "truncate",
+      "expected_tasks": 144,
+      "observed_tasks": 144,
+      "successful_tasks": 68,
+      "failed_tasks": 76,
+      "ungraded_tasks": 0,
+      "missing_tasks": 0,
+      "attempts": 144,
+      "restarted_attempts": 0,
+      "success_rate": 0.4722222222222222,
+      "known_cost_usd": 3.627289,
+      "total_cost_usd": null,
+      "billing_complete": false,
+      "failed_attempt_known_cost_usd": 2.790517,
+      "failed_attempt_cost_usd": null,
+      "model_calls": 1058,
+      "retry_calls": null,
+      "summed_attempt_latency_s": null,
+      "cost_per_success_usd": null,
+      "undefined_reasons": [
+        "incomplete_billing"
+      ]
+    }
+  ]
+}

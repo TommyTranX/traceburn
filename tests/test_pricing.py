@@ -119,6 +119,37 @@ def test_runtime_override():
     assert t.lookup("openai", "gpt-test").input_per_mtok == 1.0
 
 
+def test_per_model_provenance_survives_overlay(tmp_path):
+    path = tmp_path / "custom.json"
+    path.write_text(json.dumps({"as_of": "2026-10-01", "prices": {
+        "custom/model": {"input_per_mtok": 1, "output_per_mtok": 2, "source": "contract"}}}))
+    t = PricingTable.load(path)
+    assert t.lookup("custom", "model").as_of == "2026-10-01"
+    assert t.lookup("custom", "model").source == "contract"
+    assert t.lookup("anthropic", "claude-haiku-4-5-20251001").as_of == "2026-10-11"
+    assert t.lookup("openai", "gpt-4o").as_of == "2026-07-04"
+
+
+def test_recorder_keeps_estimation_provenance(store):
+    from traceburn.recorder import Recorder
+    from traceburn.schema import Span
+    recorder = Recorder(store=store, pricing=PricingTable.load())
+    span = Span(span_id="provenance", trace_id="t", name="call", kind="llm", start_ns=0,
+                attributes={"gen_ai.system": "anthropic", "gen_ai.request.model": "claude-haiku-4-5",
+                            "gen_ai.usage.input_tokens": 100, "gen_ai.usage.output_tokens": 10})
+    recorder._finalize_and_write(span)
+    assert span.attributes["cost_basis"] == "estimated"
+    assert span.attributes["pricing_as_of"] == "2026-10-11"
+    assert span.attributes["pricing_source"].startswith("https://platform.claude.com/")
+    # An explicitly supplied cost and its provenance must not be overwritten.
+    span.attributes.update(cost_usd=7, cost_basis="invoiced", pricing_as_of="contract date")
+    span.span_id = "explicit"
+    recorder._finalize_and_write(span)
+    assert span.attributes["cost_usd"] == 7
+    assert span.attributes["cost_basis"] == "invoiced"
+    assert span.attributes["pricing_as_of"] == "contract date"
+
+
 def test_version_suffix_never_matches_shorter_key():
     t = PricingTable(
         prices={"anthropic/claude-test-4": ModelPrice(15.0, 75.0)},

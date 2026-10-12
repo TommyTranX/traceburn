@@ -1,0 +1,8 @@
+condition,task_id,attempt,outcome,cost_usd,billing_complete,model_calls,retry_calls,latency_s
+baseline,task-1,1,fail,0.02,true,2,1,2
+baseline,task-1,2,pass,0.03,true,2,0,2
+baseline,task-2,1,fail,0.04,true,3,1,4
+baseline,task-3,1,pass,0.03,true,2,0,2
+candidate,task-1,1,fail,0.03,true,2,1,2
+candidate,task-2,1,fail,0.03,true,2,1,2
+candidate,task-3,1,pass,0.03,true,2,0,2

@@ -50,6 +50,15 @@ tokens and the pricing table, and an honest confidence level.
 
 ## Updating the pricing table
 
-`src/traceburn/pricing.json` carries provider list prices with an `as_of`
-date. Corrections and new models are welcome; cite the public pricing page
-in the PR and update `as_of`.
+`src/traceburn/pricing.json` carries provider list prices. The top-level `as_of`
+is the original snapshot date. When refreshing selected entries, add or update
+their own `as_of` and `source` fields; do not imply that untouched entries were
+reverified. New estimates preserve those fields in recorded spans.
+
+## Task outcome accounting
+
+The [measurement guide](docs/task-cost-measurement.md) defines the portable
+attempt format and evidence boundaries. Changes must preserve failed-attempt
+spend, one success per logical task, explicit unknown billing, and the declared
+cohort. Run `tests/test_outcomes.py` and the offline reanalysis when changing
+the schema or aggregation. Fixtures are not empirical agent results.

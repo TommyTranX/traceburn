@@ -37,6 +37,23 @@ def test_ls(populated_db, capsys):
     assert "$0.0123" in out
 
 
+@pytest.mark.parametrize("command", ["ls", "show", "waste"])
+@pytest.mark.parametrize("cost", [None, 0])
+def test_cli_distinguishes_unknown_cost_from_zero(tmp_path, capsys, command, cost):
+    db = str(tmp_path / "costs.db")
+    recorder = Recorder(store=Store(db))
+    with recorder.span("call", kind="llm", attributes={"cost_usd": cost}):
+        pass
+    recorder.store.close()
+    main(["--db", db, command])
+    out = capsys.readouterr().out
+    if cost is None:
+        assert "unknown" in out.lower()
+        assert "Run cost $0.0000" not in out
+    else:
+        assert "$0.0000" in out
+
+
 def test_show_with_prefix(populated_db, capsys):
     store = Store(populated_db)
     trace_id = store.list_traces()[0].trace_id
